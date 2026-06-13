@@ -49,7 +49,6 @@ export function CommandMenu() {
           <CommandItem onSelect={() => go(routes.newInvoice)}>
             <Plus />
             Nová faktura
-            <CommandShortcut>N</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => go(`${routes.clients}?new=1`)}>
             <Users />

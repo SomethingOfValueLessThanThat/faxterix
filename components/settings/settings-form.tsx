@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Save, Download, Loader2 } from "lucide-react"
+import { Save, Download, Loader2, Check } from "lucide-react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/page-header"
@@ -9,15 +9,21 @@ import { Kbd } from "@/components/kbd"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
-import { Separator } from "@/components/ui/separator"
 import { useHotkeys } from "@/hooks/use-hotkeys"
+import { formatCzechPhone } from "@/lib/format"
 import { useProfile, profileApi } from "@/lib/store"
-import type { CompanyProfile, Address } from "@/lib/types"
+import {
+  companyProfileSchema,
+  aresResultSchema,
+  fieldErrors,
+  firstError,
+} from "@/lib/schemas"
+import type { CompanyProfile } from "@/lib/types"
 
 export function SettingsForm() {
   const profile = useProfile()
   const [draft, setDraft] = React.useState<CompanyProfile>(profile)
+  const [errors, setErrors] = React.useState<Record<string, string>>({})
   const [loadingAres, setLoadingAres] = React.useState(false)
 
   // Seed the draft from the store once it has hydrated from localStorage.
@@ -32,34 +38,54 @@ export function SettingsForm() {
   const setField = <K extends keyof CompanyProfile>(
     key: K,
     value: CompanyProfile[K]
-  ) => setDraft((d) => ({ ...d, [key]: value }))
-
-  const setAddr = (key: keyof Address, value: string) =>
-    setDraft((d) => ({ ...d, address: { ...d.address, [key]: value } }))
+  ) => {
+    setDraft((d) => ({ ...d, [key]: value }))
+    setErrors((e) => {
+      if (!(key in e)) return e
+      const next = { ...e }
+      delete next[key]
+      return next
+    })
+  }
 
   function save() {
+    const result = companyProfileSchema.safeParse(draft)
+    if (!result.success) {
+      setErrors(fieldErrors(result.error))
+      toast.error(firstError(result.error))
+      return
+    }
+    setErrors({})
     profileApi.save(draft)
     toast.success("Nastavení uloženo.")
   }
 
-  useHotkeys([{ key: "s", meta: true, allowInInput: true, handler: save }], [
-    draft,
-  ])
+  useHotkeys(
+    [{ key: "s", meta: true, allowInInput: true, handler: save }],
+    [draft]
+  )
 
   async function loadFromAres() {
     const ico = draft.ico.replace(/\s+/g, "")
     if (!/^\d{8}$/.test(ico)) {
+      setErrors((e) => ({ ...e, ico: "Zadejte platné IČO (8 číslic)." }))
       toast.error("Zadejte platné IČO (8 číslic).")
       return
     }
     setLoadingAres(true)
     try {
       const res = await fetch(`/api/ares?ico=${ico}`)
-      const data = await res.json()
+      const json = await res.json()
       if (!res.ok) {
-        toast.error(data.error ?? "Načtení z ARES selhalo.")
+        toast.error(json.error ?? "Načtení z ARES selhalo.")
         return
       }
+      const parsed = aresResultSchema.safeParse(json)
+      if (!parsed.success) {
+        toast.error("ARES vrátil neočekávaná data.")
+        return
+      }
+      const data = parsed.data
       setDraft((d) => ({
         ...d,
         name: data.name || d.name,
@@ -81,17 +107,14 @@ export function SettingsForm() {
         description="Údaje vaší firmy a platební informace"
         actions={
           <Button onClick={save}>
-            <Save />
+            <Check />
             Uložit
-            <Kbd className="ml-1 border-0 bg-primary-foreground/20 text-primary-foreground">
-              ⌘S
-            </Kbd>
           </Button>
         }
       />
 
-      <div className="max-w-2xl space-y-6">
-        <section className="space-y-4 rounded-lg border p-4">
+      <div className="max-w-[504px] space-y-6">
+        <section className="space-y-4">
           <h2 className="text-sm">Dodavatel</h2>
           <div className="space-y-1.5">
             <Label>IČO</Label>
@@ -100,6 +123,7 @@ export function SettingsForm() {
                 value={draft.ico}
                 onChange={(e) => setField("ico", e.target.value)}
                 placeholder="12345678"
+                aria-invalid={!!errors.ico || undefined}
               />
               <Button
                 variant="outline"
@@ -114,118 +138,65 @@ export function SettingsForm() {
                 Načíst z ARES
               </Button>
             </div>
+            {errors.ico && <FieldError>{errors.ico}</FieldError>}
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <SettingsField label="Název / jméno">
-              <Input
-                value={draft.name}
-                onChange={(e) => setField("name", e.target.value)}
-              />
-            </SettingsField>
-            <SettingsField label="DIČ">
-              <Input
-                value={draft.dic}
-                onChange={(e) => setField("dic", e.target.value)}
-              />
-            </SettingsField>
-          </div>
-          <SettingsField label="Ulice a č.p.">
+          <SettingsField label="E-mail" error={errors.email}>
             <Input
-              value={draft.address.street}
-              onChange={(e) => setAddr("street", e.target.value)}
+              type="email"
+              value={draft.email}
+              onChange={(e) => setField("email", e.target.value)}
+              aria-invalid={!!errors.email || undefined}
             />
           </SettingsField>
-          <div className="grid grid-cols-[120px_1fr] gap-4">
-            <SettingsField label="PSČ">
-              <Input
-                value={draft.address.zip}
-                onChange={(e) => setAddr("zip", e.target.value)}
-              />
-            </SettingsField>
-            <SettingsField label="Město">
-              <Input
-                value={draft.address.city}
-                onChange={(e) => setAddr("city", e.target.value)}
-              />
-            </SettingsField>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <SettingsField label="E-mail">
-              <Input
-                type="email"
-                value={draft.email}
-                onChange={(e) => setField("email", e.target.value)}
-              />
-            </SettingsField>
-            <SettingsField label="Telefon">
-              <Input
-                value={draft.phone}
-                onChange={(e) => setField("phone", e.target.value)}
-              />
-            </SettingsField>
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div>
-              <Label>Plátce DPH</Label>
-              <p className="text-xs text-muted-foreground">
-                Na fakturách se bude počítat a zobrazovat DPH.
-              </p>
-            </div>
-            <Switch
-              checked={draft.vatPayer}
-              onCheckedChange={(v) => setField("vatPayer", v)}
+          <SettingsField label="Telefon" error={errors.phone}>
+            <Input
+              type="tel"
+              inputMode="tel"
+              value={draft.phone}
+              onChange={(e) =>
+                setField("phone", formatCzechPhone(e.target.value))
+              }
+              placeholder="+420 123 456 789"
+              aria-invalid={!!errors.phone || undefined}
             />
-          </div>
+          </SettingsField>
         </section>
 
-        <section className="space-y-4 rounded-lg border p-4">
+        <section className="space-y-4">
           <div>
             <h2 className="text-sm">Platební údaje</h2>
             <p className="text-xs text-muted-foreground">
               IBAN je potřeba pro vygenerování QR Platby na PDF.
             </p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <SettingsField label="Číslo účtu">
-              <Input
-                value={draft.bankAccount}
-                onChange={(e) => setField("bankAccount", e.target.value)}
-                placeholder="123456789/0100"
-              />
-            </SettingsField>
-            <SettingsField label="IBAN">
-              <Input
-                value={draft.iban}
-                onChange={(e) => setField("iban", e.target.value)}
-                placeholder="CZ65 0800 0000 1920 0014 5399"
-              />
-            </SettingsField>
-          </div>
+          <SettingsField label="Číslo účtu" error={errors.bankAccount}>
+            <Input
+              value={draft.bankAccount}
+              onChange={(e) => setField("bankAccount", e.target.value)}
+              placeholder="123456789/0100"
+              aria-invalid={!!errors.bankAccount || undefined}
+            />
+          </SettingsField>
+          <SettingsField label="IBAN" error={errors.iban}>
+            <Input
+              value={draft.iban}
+              onChange={(e) => setField("iban", e.target.value)}
+              placeholder="CZ65 0800 0000 1920 0014 5399"
+              aria-invalid={!!errors.iban || undefined}
+            />
+          </SettingsField>
         </section>
 
-        <section className="space-y-4 rounded-lg border p-4">
+        <section className="space-y-4">
           <h2 className="text-sm">Fakturace</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <SettingsField label="Splatnost (dní)">
-              <Input
-                type="number"
-                value={draft.dueDays}
-                onChange={(e) => setField("dueDays", Number(e.target.value))}
-              />
-            </SettingsField>
-            <SettingsField label="Formát čísla faktury">
-              <Input
-                value={draft.numberFormat}
-                onChange={(e) => setField("numberFormat", e.target.value)}
-                placeholder="{YYYY}{NNNN}"
-              />
-            </SettingsField>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Tokeny: {"{YYYY}"} rok, {"{MM}"} měsíc, {"{NNNN}"} pořadové číslo
-            (počet N určuje počet číslic).
-          </p>
+          <SettingsField label="Splatnost (dní)" error={errors.dueDays}>
+            <Input
+              type="number"
+              value={draft.dueDays}
+              onChange={(e) => setField("dueDays", Number(e.target.value))}
+              aria-invalid={!!errors.dueDays || undefined}
+            />
+          </SettingsField>
         </section>
       </div>
     </>
@@ -234,15 +205,22 @@ export function SettingsForm() {
 
 function SettingsField({
   label,
+  error,
   children,
 }: {
   label: string
+  error?: string
   children: React.ReactNode
 }) {
   return (
     <div className="space-y-1.5">
       <Label className="text-xs">{label}</Label>
       {children}
+      {error && <FieldError>{error}</FieldError>}
     </div>
   )
+}
+
+function FieldError({ children }: { children: React.ReactNode }) {
+  return <p className="text-xs text-destructive">{children}</p>
 }

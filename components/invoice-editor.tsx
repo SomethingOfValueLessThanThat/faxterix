@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Trash2, FileDown, Save, ArrowLeft } from "lucide-react"
+import { Plus, Trash2, FileDown, Save, ArrowLeft, Check } from "lucide-react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/page-header"
@@ -28,6 +28,7 @@ import {
   invoiceApi,
 } from "@/lib/store"
 import { computeTotals, emptyItem, nextInvoiceNumber } from "@/lib/invoice"
+import { invoiceDraftSchema, fieldErrors, firstError } from "@/lib/schemas"
 import { formatCZK, formatDate } from "@/lib/format"
 import { addDaysISO, todayISO } from "@/lib/format"
 import { routes } from "@/lib/routes"
@@ -40,6 +41,7 @@ import {
 import { CalendarIcon } from "lucide-react"
 import { cs } from "date-fns/locale"
 import { downloadInvoicePdf } from "@/lib/pdf/generate"
+import { buildSpayd } from "@/lib/spayd"
 import type {
   Invoice,
   InvoiceItem,
@@ -75,6 +77,7 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
   const [draft, setDraft] = React.useState<Invoice>(() =>
     existing ? structuredClone(existing) : createDraft(invoices, profile)
   )
+  const [errors, setErrors] = React.useState<Record<string, string>>({})
   // Pokud se existující faktura načte později (hydratace), promítneme ji.
   const loadedId = React.useRef(invoiceId)
   React.useEffect(() => {
@@ -102,6 +105,7 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
       clientId: clientId || null,
       client: snapshotOf(client),
     }))
+    setErrors({})
   }
 
   function updateItem(id: string, patch: Partial<InvoiceItem>) {
@@ -109,6 +113,7 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
       ...d,
       items: d.items.map((it) => (it.id === id ? { ...it, ...patch } : it)),
     }))
+    setErrors({})
   }
 
   function addItem() {
@@ -122,6 +127,21 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
     }))
   }
 
+  function validate(): boolean {
+    const result = invoiceDraftSchema.safeParse({
+      clientId: draft.clientId,
+      issueDate: draft.issueDate,
+      items: draft.items,
+    })
+    if (!result.success) {
+      setErrors(fieldErrors(result.error))
+      toast.error(firstError(result.error))
+      return false
+    }
+    setErrors({})
+    return true
+  }
+
   function persist(): Invoice {
     const toSave = { ...draft, status: "sent" as InvoiceStatus }
     if (existing) {
@@ -133,13 +153,14 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
   }
 
   function handleSave() {
+    if (!validate()) return
     const saved = persist()
     toast.success(`Faktura ${saved.number} uložena.`)
-    // A freshly created invoice gets its own URL so a reload keeps editing it.
-    if (!existing) router.replace(routes.invoice(saved._id))
+    router.push(routes.invoices)
   }
 
   async function handlePdf() {
+    if (!validate()) return
     const saved = persist()
     try {
       await downloadInvoicePdf(saved, profile)
@@ -176,19 +197,19 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
               <ArrowLeft />
               Zpět
             </Button>
-            <Button variant="secondary" onClick={handlePdf}>
+            <Button variant="outline" onClick={handlePdf}>
               <FileDown />
               Export PDF
             </Button>
             <Button onClick={handleSave}>
-              <Save />
+              <Check />
               Uložit fakturu
             </Button>
           </>
         }
       />
 
-      <div className="space-y-6">
+      <div className="space-y-10">
         <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
           <div className="min-w-0">
             {/* Hlavička */}
@@ -222,6 +243,9 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                       )}
                     </SelectContent>
                   </Select>
+                  {errors.clientId && (
+                    <FieldError>{errors.clientId}</FieldError>
+                  )}
                 </Field>
               </div>
               <div className="grid gap-4">
@@ -236,7 +260,7 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                     {PAYMENT_METHODS.map((o) => (
                       <label
                         key={o.value}
-                        className="flex items-center gap-2.5 cursor-pointer select-none"
+                        className="select-non mt-2 flex cursor-pointer items-center gap-2.5"
                       >
                         <Checkbox
                           checked={draft.paymentMethod === o.value}
@@ -276,7 +300,13 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                   {formatCZK(totals.total)}
                 </span>
               </div>
-              {!profile.iban && (
+              {profile.iban ? (
+                <QrPreview
+                  invoice={draft}
+                  profile={profile}
+                  total={totals.total}
+                />
+              ) : (
                 <p className="text-xs text-muted-foreground">
                   Doplňte IBAN v nastavení pro QR Platbu na PDF.
                 </p>
@@ -294,12 +324,32 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
             </Button>
           </div>
           <div className="hidden border-b bg-muted/50 sm:grid sm:grid-cols-12 sm:items-center sm:gap-2 sm:px-4 sm:py-2.5">
-            <span className="col-span-3 text-xs tracking-wide text-muted-foreground uppercase">Popis</span>
-            <span className="col-span-2 text-xs tracking-wide text-muted-foreground uppercase">Počet</span>
-            <span className="col-span-2 text-xs tracking-wide text-muted-foreground uppercase">MJ</span>
-            <span className="col-span-2 text-xs tracking-wide text-muted-foreground uppercase">Cena/MJ</span>
-            {profile.vatPayer && <span className="col-span-2 text-xs tracking-wide text-muted-foreground uppercase">DPH %</span>}
-            <div className={profile.vatPayer ? "col-span-1 flex justify-end" : "col-span-3 flex justify-end"}>
+            <span
+              className={`${profile.vatPayer ? "col-span-4" : "col-span-5"} pl-2 text-xs tracking-wide text-muted-foreground uppercase`}
+            >
+              Popis
+            </span>
+            <span className="col-span-1 pl-2 text-xs tracking-wide text-muted-foreground uppercase">
+              Počet
+            </span>
+            <span className="col-span-2 pl-2 text-xs tracking-wide text-muted-foreground uppercase">
+              MJ
+            </span>
+            <span className="col-span-2 pl-2 text-xs tracking-wide text-muted-foreground uppercase">
+              Cena/MJ
+            </span>
+            {profile.vatPayer && (
+              <span className="col-span-2 pl-2 text-xs tracking-wide text-muted-foreground uppercase">
+                DPH %
+              </span>
+            )}
+            <div
+              className={
+                profile.vatPayer
+                  ? "col-span-1 flex justify-end"
+                  : "col-span-2 flex justify-end"
+              }
+            >
               <Button variant="outline" size="sm" onClick={addItem}>
                 <Plus />
                 Přidat
@@ -307,12 +357,14 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
             </div>
           </div>
           <div className="divide-y">
-            {draft.items.map((item) => (
+            {draft.items.map((item, index) => (
               <div
                 key={item.id}
                 className="grid grid-cols-12 items-end gap-2 px-4 py-3"
               >
-                <div className="col-span-12 sm:col-span-3">
+                <div
+                  className={`col-span-12 ${profile.vatPayer ? "sm:col-span-4" : "sm:col-span-5"}`}
+                >
                   <Label className="mb-1 text-xs text-muted-foreground sm:hidden">
                     Popis
                   </Label>
@@ -322,9 +374,12 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                       updateItem(item.id, { description: e.target.value })
                     }
                     placeholder="Popis položky"
+                    aria-invalid={
+                      !!errors[`items.${index}.description`] || undefined
+                    }
                   />
                 </div>
-                <div className="col-span-4 sm:col-span-2">
+                <div className="col-span-4 sm:col-span-1">
                   <Label className="mb-1 text-xs text-muted-foreground sm:hidden">
                     Počet
                   </Label>
@@ -337,6 +392,9 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                         quantity: Number(e.target.value),
                       })
                     }
+                    aria-invalid={
+                      !!errors[`items.${index}.quantity`] || undefined
+                    }
                   />
                 </div>
                 <div className="col-span-4 sm:col-span-2">
@@ -348,6 +406,7 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                     onChange={(e) =>
                       updateItem(item.id, { unit: e.target.value })
                     }
+                    aria-invalid={!!errors[`items.${index}.unit`] || undefined}
                   />
                 </div>
                 <div className="col-span-4 sm:col-span-2">
@@ -362,6 +421,9 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                       updateItem(item.id, {
                         unitPrice: Number(e.target.value),
                       })
+                    }
+                    aria-invalid={
+                      !!errors[`items.${index}.unitPrice`] || undefined
                     }
                   />
                 </div>
@@ -393,7 +455,7 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                   className={
                     profile.vatPayer
                       ? "col-span-6 flex items-center justify-end gap-2 sm:col-span-1"
-                      : "col-span-12 flex items-center justify-end gap-2 sm:col-span-3"
+                      : "col-span-12 flex items-center justify-end gap-2 sm:col-span-2"
                   }
                 >
                   <span className="text-sm tabular-nums">
@@ -458,6 +520,10 @@ function Field({
   )
 }
 
+function FieldError({ children }: { children: React.ReactNode }) {
+  return <p className="text-xs text-destructive">{children}</p>
+}
+
 function DatePicker({
   value,
   onChange,
@@ -518,6 +584,68 @@ function Row({
     >
       <span>{label}</span>
       <span className="tabular-nums">{value}</span>
+    </div>
+  )
+}
+
+function QrPreview({
+  invoice,
+  profile,
+  total,
+}: {
+  invoice: Invoice
+  profile: CompanyProfile
+  total: number
+}) {
+  const [dataUrl, setDataUrl] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    if (!profile.iban || total <= 0) {
+      setDataUrl(null)
+      return
+    }
+    let active = true
+    const payload = buildSpayd({
+      iban: profile.iban,
+      amount: total,
+      variableSymbol: invoice.variableSymbol,
+      recipientName: profile.name,
+      message: `Faktura ${invoice.number}`,
+      dueDate: invoice.dueDate,
+    })
+    import("qrcode")
+      .then(({ default: QRCode }) =>
+        QRCode.toDataURL(payload, { margin: 1, width: 320 })
+      )
+      .then((url) => {
+        if (active) setDataUrl(url)
+      })
+      .catch(() => {
+        if (active) setDataUrl(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [
+    profile.iban,
+    profile.name,
+    total,
+    invoice.variableSymbol,
+    invoice.number,
+    invoice.dueDate,
+  ])
+
+  if (!dataUrl) return null
+
+  return (
+    <div className="flex flex-col items-center gap-1.5 pt-1">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={dataUrl}
+        alt="QR Platba"
+        className="size-32 rounded bg-white p-1.5"
+      />
+      <span className="text-xs text-muted-foreground">QR Platba</span>
     </div>
   )
 }

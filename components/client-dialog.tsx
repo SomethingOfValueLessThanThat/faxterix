@@ -17,6 +17,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { clientApi } from "@/lib/store"
 import { emptyAddress } from "@/lib/types"
+import {
+  clientDraftSchema,
+  icoSchema,
+  aresResultSchema,
+  fieldErrors,
+  firstError,
+} from "@/lib/schemas"
 import type { Client, Address } from "@/lib/types"
 
 type Draft = Omit<Client, "_id" | "createdAt" | "updatedAt">
@@ -62,21 +69,40 @@ function ClientForm({
   const [draft, setDraft] = React.useState<Draft>(() =>
     client ? structuredClone(client) : blankDraft()
   )
+  const [errors, setErrors] = React.useState<Record<string, string>>({})
   const [loading, setLoading] = React.useState(false)
 
-  const setField = <K extends keyof Draft>(key: K, value: Draft[K]) =>
-    setDraft((d) => ({ ...d, [key]: value }))
+  const clearError = (key: string) =>
+    setErrors((e) => {
+      if (!(key in e)) return e
+      const next = { ...e }
+      delete next[key]
+      return next
+    })
 
-  const setAddr = (key: keyof Address, value: string) =>
+  const setField = <K extends keyof Draft>(key: K, value: Draft[K]) => {
+    setDraft((d) => ({ ...d, [key]: value }))
+    clearError(key)
+  }
+
+  const setAddr = (key: keyof Address, value: string) => {
     setDraft((d) => ({ ...d, address: { ...d.address, [key]: value } }))
+    clearError(`address.${key}`)
+  }
 
   async function fetchFromAres(ico: string): Promise<Draft | null> {
     const res = await fetch(`/api/ares?ico=${ico}`)
-    const data = await res.json()
+    const json = await res.json()
     if (!res.ok) {
-      toast.error(data.error ?? "Načtení z ARES selhalo.")
+      toast.error(json.error ?? "Načtení z ARES selhalo.")
       return null
     }
+    const parsed = aresResultSchema.safeParse(json)
+    if (!parsed.success) {
+      toast.error("ARES vrátil neočekávaná data.")
+      return null
+    }
+    const data = parsed.data
     return {
       name: data.name || "",
       ico: data.ico || ico,
@@ -88,14 +114,15 @@ function ClientForm({
 
   async function save() {
     if (!client) {
-      const ico = draft.ico.replace(/\s+/g, "")
-      if (!/^\d{8}$/.test(ico)) {
-        toast.error("Zadejte platné IČO (8 číslic).")
+      const result = icoSchema.safeParse(draft.ico)
+      if (!result.success) {
+        setErrors({ ico: firstError(result.error) })
+        toast.error(firstError(result.error))
         return
       }
       setLoading(true)
       try {
-        const fetched = await fetchFromAres(ico)
+        const fetched = await fetchFromAres(result.data.replace(/\s+/g, ""))
         if (!fetched) return
         clientApi.create(fetched)
         toast.success("Klient přidán.")
@@ -108,10 +135,13 @@ function ClientForm({
       return
     }
 
-    if (!draft.name.trim()) {
-      toast.error("Vyplňte název klienta.")
+    const result = clientDraftSchema.safeParse(draft)
+    if (!result.success) {
+      setErrors(fieldErrors(result.error))
+      toast.error(firstError(result.error))
       return
     }
+    setErrors({})
     clientApi.patch(client._id, draft)
     toast.success("Klient uložen.")
     onClose()
@@ -120,6 +150,7 @@ function ClientForm({
   async function loadFromAres() {
     const ico = draft.ico.replace(/\s+/g, "")
     if (!/^\d{8}$/.test(ico)) {
+      setErrors((e) => ({ ...e, ico: "Zadejte platné IČO (8 číslic)." }))
       toast.error("Zadejte platné IČO (8 číslic).")
       return
     }
@@ -162,8 +193,10 @@ function ClientForm({
             value={draft.ico}
             onChange={(e) => setField("ico", e.target.value)}
             placeholder="12345678"
+            aria-invalid={!!errors.ico || undefined}
             autoFocus
           />
+          {errors.ico && <FieldError>{errors.ico}</FieldError>}
         </div>
       ) : (
         <div className="space-y-4">
@@ -174,6 +207,7 @@ function ClientForm({
                 value={draft.ico}
                 onChange={(e) => setField("ico", e.target.value)}
                 placeholder="12345678"
+                aria-invalid={!!errors.ico || undefined}
                 autoFocus
               />
               <Button
@@ -190,6 +224,7 @@ function ClientForm({
                 ARES
               </Button>
             </div>
+            {errors.ico && <FieldError>{errors.ico}</FieldError>}
           </div>
 
           <div className="space-y-1.5">
@@ -198,7 +233,9 @@ function ClientForm({
               value={draft.name}
               onChange={(e) => setField("name", e.target.value)}
               placeholder="Název firmy / jméno"
+              aria-invalid={!!errors.name || undefined}
             />
+            {errors.name && <FieldError>{errors.name}</FieldError>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -208,7 +245,9 @@ function ClientForm({
                 value={draft.dic}
                 onChange={(e) => setField("dic", e.target.value)}
                 placeholder="CZ12345678"
+                aria-invalid={!!errors.dic || undefined}
               />
+              {errors.dic && <FieldError>{errors.dic}</FieldError>}
             </div>
             <div className="space-y-1.5">
               <Label>E-mail</Label>
@@ -217,7 +256,9 @@ function ClientForm({
                 value={draft.email}
                 onChange={(e) => setField("email", e.target.value)}
                 placeholder="faktury@firma.cz"
+                aria-invalid={!!errors.email || undefined}
               />
+              {errors.email && <FieldError>{errors.email}</FieldError>}
             </div>
           </div>
 
@@ -234,7 +275,11 @@ function ClientForm({
               <Input
                 value={draft.address.zip}
                 onChange={(e) => setAddr("zip", e.target.value)}
+                aria-invalid={!!errors["address.zip"] || undefined}
               />
+              {errors["address.zip"] && (
+                <FieldError>{errors["address.zip"]}</FieldError>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Město</Label>
@@ -258,4 +303,8 @@ function ClientForm({
       </DialogFooter>
     </div>
   )
+}
+
+function FieldError({ children }: { children: React.ReactNode }) {
+  return <p className="text-xs text-destructive">{children}</p>
 }

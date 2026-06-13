@@ -179,6 +179,22 @@ export const invoiceApi = {
   },
 }
 
+// --- Hromadný import -------------------------------------------------------
+
+export const dataApi = {
+  /**
+   * Zapíše naimportované klienty i faktury jedním zápisem. Deduplikace se řeší
+   * při sestavení dat (viz `parseFakturoidCsv`), zde se pouze připojí.
+   */
+  importData(clients: Client[], invoices: Invoice[]) {
+    update((db) => ({
+      ...db,
+      clients: [...db.clients, ...clients],
+      invoices: [...db.invoices, ...invoices],
+    }))
+  },
+}
+
 // --- Profil firmy ----------------------------------------------------------
 
 export function useProfile(): CompanyProfile {

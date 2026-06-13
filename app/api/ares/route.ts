@@ -2,23 +2,11 @@
 // Veřejné API: https://ares.gov.cz/ekonomicke-subjekty-v-be/rest
 
 import { NextResponse } from "next/server"
+import { z } from "zod"
 
-interface AresSidlo {
-  nazevUlice?: string
-  cisloDomovni?: number
-  cisloOrientacni?: number
-  nazevObce?: string
-  nazevCastiObce?: string
-  psc?: number
-  textovaAdresa?: string
-}
+import { aresRawSchema, icoSchema } from "@/lib/schemas"
 
-interface AresResponse {
-  obchodniJmeno?: string
-  ico?: string
-  dic?: string
-  sidlo?: AresSidlo
-}
+type AresSidlo = NonNullable<z.infer<typeof aresRawSchema>["sidlo"]>
 
 function buildStreet(sidlo: AresSidlo): string {
   if (sidlo.nazevUlice) {
@@ -41,14 +29,15 @@ function formatPsc(psc?: number): string {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const ico = (searchParams.get("ico") ?? "").replace(/\s+/g, "")
+  const parsedIco = icoSchema.safeParse(searchParams.get("ico") ?? "")
 
-  if (!/^\d{8}$/.test(ico)) {
+  if (!parsedIco.success) {
     return NextResponse.json(
       { error: "IČO musí mít 8 číslic." },
       { status: 400 }
     )
   }
+  const ico = parsedIco.data.replace(/\s+/g, "")
 
   try {
     const res = await fetch(
@@ -69,7 +58,14 @@ export async function GET(request: Request) {
       )
     }
 
-    const data = (await res.json()) as AresResponse
+    const parsed = aresRawSchema.safeParse(await res.json())
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "ARES vrátil neočekávaná data." },
+        { status: 502 }
+      )
+    }
+    const data = parsed.data
     const sidlo = data.sidlo ?? {}
 
     return NextResponse.json({
