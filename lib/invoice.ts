@@ -86,7 +86,7 @@ export const emptyItem = (vatRate = 21): InvoiceItem => ({
   id: crypto.randomUUID(),
   description: "",
   quantity: 1,
-  unit: "ks",
+  unit: "hodina",
   unitPrice: 0,
   vatRate,
 })

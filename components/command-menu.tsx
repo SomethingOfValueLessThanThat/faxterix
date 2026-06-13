@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { FileText, Users, Settings, Plus, FileDown } from "lucide-react"
 
 import {
@@ -14,12 +15,12 @@ import {
 } from "@/components/ui/command"
 import { useHotkeys } from "@/hooks/use-hotkeys"
 import { useInvoices } from "@/lib/store"
-import { useAppNav } from "@/lib/app-nav"
+import { routes } from "@/lib/routes"
 
 export function CommandMenu() {
   const [open, setOpen] = React.useState(false)
   const invoices = useInvoices()
-  const { navigate } = useAppNav()
+  const router = useRouter()
 
   useHotkeys(
     [
@@ -34,9 +35,9 @@ export function CommandMenu() {
     []
   )
 
-  function run(action: () => void) {
+  function go(href: string) {
     setOpen(false)
-    action()
+    router.push(href)
   }
 
   return (
@@ -45,26 +46,26 @@ export function CommandMenu() {
       <CommandList>
         <CommandEmpty>Nic nenalezeno.</CommandEmpty>
         <CommandGroup heading="Akce">
-          <CommandItem onSelect={() => run(() => navigate({ type: "new-invoice" }))}>
+          <CommandItem onSelect={() => go(routes.newInvoice)}>
             <Plus />
             Nová faktura
             <CommandShortcut>N</CommandShortcut>
           </CommandItem>
-          <CommandItem onSelect={() => run(() => navigate({ type: "new-client" }))}>
+          <CommandItem onSelect={() => go(`${routes.clients}?new=1`)}>
             <Users />
             Nový klient
           </CommandItem>
         </CommandGroup>
         <CommandGroup heading="Přejít na">
-          <CommandItem onSelect={() => run(() => navigate({ type: "tab", tab: "faktury" }))}>
+          <CommandItem onSelect={() => go(routes.invoices)}>
             <FileText />
             Faktury
           </CommandItem>
-          <CommandItem onSelect={() => run(() => navigate({ type: "tab", tab: "klienti" }))}>
+          <CommandItem onSelect={() => go(routes.clients)}>
             <Users />
             Klienti
           </CommandItem>
-          <CommandItem onSelect={() => run(() => navigate({ type: "tab", tab: "nastaveni" }))}>
+          <CommandItem onSelect={() => go(routes.settings)}>
             <Settings />
             Nastavení
           </CommandItem>
@@ -75,7 +76,7 @@ export function CommandMenu() {
               <CommandItem
                 key={inv._id}
                 value={`${inv.number} ${inv.client?.name ?? ""}`}
-                onSelect={() => run(() => navigate({ type: "edit-invoice", id: inv._id }))}
+                onSelect={() => go(routes.invoice(inv._id))}
               >
                 <FileDown />
                 {inv.number}

@@ -62,7 +62,7 @@ function ClientForm({
   const [draft, setDraft] = React.useState<Draft>(() =>
     client ? structuredClone(client) : blankDraft()
   )
-  const [loadingAres, setLoadingAres] = React.useState(false)
+  const [loading, setLoading] = React.useState(false)
 
   const setField = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }))
@@ -70,48 +70,70 @@ function ClientForm({
   const setAddr = (key: keyof Address, value: string) =>
     setDraft((d) => ({ ...d, address: { ...d.address, [key]: value } }))
 
+  async function fetchFromAres(ico: string): Promise<Draft | null> {
+    const res = await fetch(`/api/ares?ico=${ico}`)
+    const data = await res.json()
+    if (!res.ok) {
+      toast.error(data.error ?? "Načtení z ARES selhalo.")
+      return null
+    }
+    return {
+      name: data.name || "",
+      ico: data.ico || ico,
+      dic: data.dic || "",
+      email: "",
+      address: { ...emptyAddress(), ...data.address },
+    }
+  }
+
+  async function save() {
+    if (!client) {
+      const ico = draft.ico.replace(/\s+/g, "")
+      if (!/^\d{8}$/.test(ico)) {
+        toast.error("Zadejte platné IČO (8 číslic).")
+        return
+      }
+      setLoading(true)
+      try {
+        const fetched = await fetchFromAres(ico)
+        if (!fetched) return
+        clientApi.create(fetched)
+        toast.success("Klient přidán.")
+        onClose()
+      } catch {
+        toast.error("Nepodařilo se spojit s ARES.")
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
+
+    if (!draft.name.trim()) {
+      toast.error("Vyplňte název klienta.")
+      return
+    }
+    clientApi.patch(client._id, draft)
+    toast.success("Klient uložen.")
+    onClose()
+  }
+
   async function loadFromAres() {
     const ico = draft.ico.replace(/\s+/g, "")
     if (!/^\d{8}$/.test(ico)) {
       toast.error("Zadejte platné IČO (8 číslic).")
       return
     }
-    setLoadingAres(true)
+    setLoading(true)
     try {
-      const res = await fetch(`/api/ares?ico=${ico}`)
-      const data = await res.json()
-      if (!res.ok) {
-        toast.error(data.error ?? "Načtení z ARES selhalo.")
-        return
-      }
-      setDraft((d) => ({
-        ...d,
-        name: data.name || d.name,
-        ico: data.ico || d.ico,
-        dic: data.dic || d.dic,
-        address: { ...d.address, ...data.address },
-      }))
+      const fetched = await fetchFromAres(ico)
+      if (!fetched) return
+      setDraft((d) => ({ ...d, ...fetched }))
       toast.success("Údaje načteny z ARES.")
     } catch {
       toast.error("Nepodařilo se spojit s ARES.")
     } finally {
-      setLoadingAres(false)
+      setLoading(false)
     }
-  }
-
-  function save() {
-    if (!draft.name.trim()) {
-      toast.error("Vyplňte název klienta.")
-      return
-    }
-    if (client) {
-      clientApi.patch(client._id, draft)
-      toast.success("Klient uložen.")
-    } else {
-      clientApi.create(draft)
-      toast.success("Klient přidán.")
-    }
-    onClose()
   }
 
   return (
@@ -122,99 +144,117 @@ function ClientForm({
           save()
         }
       }}
+      className="flex flex-col gap-6"
     >
       <DialogHeader>
         <DialogTitle>{client ? "Upravit klienta" : "Nový klient"}</DialogTitle>
-        <DialogDescription>
-          Zadejte IČO a načtěte údaje z registru ARES.
-        </DialogDescription>
+        {!client && (
+          <DialogDescription>
+            Zadejte IČO a načtěte údaje z registru ARES.
+          </DialogDescription>
+        )}
       </DialogHeader>
 
-      <div className="space-y-4">
+      {!client ? (
         <div className="space-y-1.5">
           <Label>IČO</Label>
-          <div className="flex gap-2">
-            <Input
-              value={draft.ico}
-              onChange={(e) => setField("ico", e.target.value)}
-              placeholder="12345678"
-              autoFocus
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={loadFromAres}
-              disabled={loadingAres}
-            >
-              {loadingAres ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <Download />
-              )}
-              ARES
-            </Button>
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label>Název</Label>
           <Input
-            value={draft.name}
-            onChange={(e) => setField("name", e.target.value)}
-            placeholder="Název firmy / jméno"
+            value={draft.ico}
+            onChange={(e) => setField("ico", e.target.value)}
+            placeholder="12345678"
+            autoFocus
           />
         </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>IČO</Label>
+            <div className="flex gap-2">
+              <Input
+                value={draft.ico}
+                onChange={(e) => setField("ico", e.target.value)}
+                placeholder="12345678"
+                autoFocus
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={loadFromAres}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Download />
+                )}
+                ARES
+              </Button>
+            </div>
+          </div>
 
-        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label>DIČ</Label>
+            <Label>Název</Label>
             <Input
-              value={draft.dic}
-              onChange={(e) => setField("dic", e.target.value)}
-              placeholder="CZ12345678"
+              value={draft.name}
+              onChange={(e) => setField("name", e.target.value)}
+              placeholder="Název firmy / jméno"
             />
           </div>
-          <div className="space-y-1.5">
-            <Label>E-mail</Label>
-            <Input
-              type="email"
-              value={draft.email}
-              onChange={(e) => setField("email", e.target.value)}
-              placeholder="faktury@firma.cz"
-            />
-          </div>
-        </div>
 
-        <div className="space-y-1.5">
-          <Label>Ulice a č.p.</Label>
-          <Input
-            value={draft.address.street}
-            onChange={(e) => setAddr("street", e.target.value)}
-          />
-        </div>
-        <div className="grid grid-cols-[100px_1fr] gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>DIČ</Label>
+              <Input
+                value={draft.dic}
+                onChange={(e) => setField("dic", e.target.value)}
+                placeholder="CZ12345678"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>E-mail</Label>
+              <Input
+                type="email"
+                value={draft.email}
+                onChange={(e) => setField("email", e.target.value)}
+                placeholder="faktury@firma.cz"
+              />
+            </div>
+          </div>
+
           <div className="space-y-1.5">
-            <Label>PSČ</Label>
+            <Label>Ulice a č.p.</Label>
             <Input
-              value={draft.address.zip}
-              onChange={(e) => setAddr("zip", e.target.value)}
+              value={draft.address.street}
+              onChange={(e) => setAddr("street", e.target.value)}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label>Město</Label>
-            <Input
-              value={draft.address.city}
-              onChange={(e) => setAddr("city", e.target.value)}
-            />
+          <div className="grid grid-cols-[100px_1fr] gap-3">
+            <div className="space-y-1.5">
+              <Label>PSČ</Label>
+              <Input
+                value={draft.address.zip}
+                onChange={(e) => setAddr("zip", e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Město</Label>
+              <Input
+                value={draft.address.city}
+                onChange={(e) => setAddr("city", e.target.value)}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>
           Zrušit
         </Button>
-        <Button onClick={save}>Uložit</Button>
+        <Button onClick={save} disabled={loading}>
+          {loading ? <Loader2 className="animate-spin" /> : null}
+          Uložit
+        </Button>
       </DialogFooter>
     </div>
   )

@@ -15,12 +15,12 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-end justify-between gap-3 border-b px-6 py-5",
+        "flex flex-wrap items-end justify-between gap-3 border-b pb-4 mb-6",
         className
       )}
     >
       <div className="min-w-0">
-        <h1 className="truncate text-xl font-semibold tracking-tight">
+        <h1 className="truncate text-xl tracking-tight">
           {title}
         </h1>
         {description ? (

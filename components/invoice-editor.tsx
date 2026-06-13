@@ -1,15 +1,14 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { Plus, Trash2, FileDown, Save, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/page-header"
-import { Kbd } from "@/components/kbd"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import {
   Select,
@@ -18,6 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { cn } from "@/lib/utils"
 import { useHotkeys } from "@/hooks/use-hotkeys"
 import {
   useClients,
@@ -27,8 +28,17 @@ import {
   invoiceApi,
 } from "@/lib/store"
 import { computeTotals, emptyItem, nextInvoiceNumber } from "@/lib/invoice"
-import { formatCZK } from "@/lib/format"
+import { formatCZK, formatDate } from "@/lib/format"
 import { addDaysISO, todayISO } from "@/lib/format"
+import { routes } from "@/lib/routes"
+import { Calendar } from "@/components/ui/calendar"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { CalendarIcon } from "lucide-react"
+import { cs } from "date-fns/locale"
 import { downloadInvoicePdf } from "@/lib/pdf/generate"
 import type {
   Invoice,
@@ -39,10 +49,9 @@ import type {
 } from "@/lib/types"
 
 const VAT_RATES = [21, 12, 0]
-const STATUS_OPTIONS: { value: InvoiceStatus; label: string }[] = [
-  { value: "draft", label: "Koncept" },
-  { value: "sent", label: "Odesláno" },
-  { value: "paid", label: "Zaplaceno" },
+const PAYMENT_METHODS = [
+  { value: "Převodem", label: "Převodem" },
+  { value: "Hotovostí", label: "Hotovostí" },
 ]
 
 function snapshotOf(client: Client | undefined) {
@@ -56,15 +65,8 @@ function snapshotOf(client: Client | undefined) {
   }
 }
 
-export function InvoiceEditor({
-  invoiceId,
-  onBack,
-  onSaved,
-}: {
-  invoiceId?: string
-  onBack: () => void
-  onSaved?: (id: string) => void
-}) {
+export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
+  const router = useRouter()
   const clients = useClients()
   const profile = useProfile()
   const invoices = useInvoices()
@@ -121,18 +123,20 @@ export function InvoiceEditor({
   }
 
   function persist(): Invoice {
+    const toSave = { ...draft, status: "sent" as InvoiceStatus }
     if (existing) {
-      invoiceApi.patch(existing._id, draft)
-      return draft
+      invoiceApi.patch(existing._id, toSave)
+      return toSave
     }
-    const id = invoiceApi.create(draft)
-    return { ...draft, _id: id }
+    const id = invoiceApi.create(toSave)
+    return { ...toSave, _id: id }
   }
 
   function handleSave() {
     const saved = persist()
     toast.success(`Faktura ${saved.number} uložena.`)
-    if (!existing) onSaved?.(saved._id)
+    // A freshly created invoice gets its own URL so a reload keeps editing it.
+    if (!existing) router.replace(routes.invoice(saved._id))
   }
 
   async function handlePdf() {
@@ -143,7 +147,7 @@ export function InvoiceEditor({
       console.error(err)
       toast.error("Nepodařilo se vytvořit PDF.")
     }
-    if (!existing) onSaved?.(saved._id)
+    if (!existing) router.replace(routes.invoice(saved._id))
   }
 
   useHotkeys(
@@ -161,291 +165,258 @@ export function InvoiceEditor({
   return (
     <>
       <PageHeader
-        title={existing ? `Faktura ${existing.number}` : "Nová faktura"}
+        title="Faktura"
+        description={draft.number}
         actions={
           <>
-            <Button variant="ghost" onClick={onBack}>
+            <Button
+              variant="ghost"
+              onClick={() => router.push(routes.invoices)}
+            >
               <ArrowLeft />
               Zpět
             </Button>
-            <Button variant="outline" onClick={handlePdf}>
+            <Button variant="secondary" onClick={handlePdf}>
               <FileDown />
-              PDF
+              Export PDF
             </Button>
             <Button onClick={handleSave}>
               <Save />
-              Uložit
-              <Kbd className="ml-1 border-0 bg-primary-foreground/20 text-primary-foreground">
-                ⌘S
-              </Kbd>
+              Uložit fakturu
             </Button>
           </>
         }
       />
 
-      <div className="grid gap-6 p-6 lg:grid-cols-[1fr_300px]">
-        <div className="min-w-0 space-y-6">
-          {/* Hlavička */}
-          <section className="space-y-4 rounded-lg border p-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Číslo faktury">
-                <Input
-                  value={draft.number}
-                  onChange={(e) => set("number", e.target.value)}
-                />
-              </Field>
-              <Field label="Klient">
-                <Select
-                  value={draft.clientId ?? ""}
-                  onValueChange={(v) => selectClient(String(v ?? ""))}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Vyberte klienta">
-                      {(id: string | null) =>
-                        id
-                          ? (clients.find((c) => c._id === id)?.name ?? "")
-                          : "Vyberte klienta"
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.length === 0 ? (
-                      <div className="px-2 py-4 text-center text-sm text-muted-foreground">
-                        Žádní klienti
-                      </div>
-                    ) : (
-                      clients.map((c) => (
-                        <SelectItem key={c._id} value={c._id}>
-                          {c.name}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Datum vystavení">
-                <Input
-                  type="date"
-                  value={draft.issueDate}
-                  onChange={(e) => set("issueDate", e.target.value)}
-                />
-              </Field>
-              <Field label="Splatnost">
-                <Input
-                  type="date"
-                  value={draft.dueDate}
-                  onChange={(e) => set("dueDate", e.target.value)}
-                />
-              </Field>
-              <Field label="DUZP">
-                <Input
-                  type="date"
-                  value={draft.taxDate}
-                  onChange={(e) => set("taxDate", e.target.value)}
-                />
-              </Field>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Variabilní symbol">
-                <Input
-                  value={draft.variableSymbol}
-                  onChange={(e) => set("variableSymbol", e.target.value)}
-                />
-              </Field>
-              <Field label="Způsob platby">
-                <Input
-                  value={draft.paymentMethod}
-                  onChange={(e) => set("paymentMethod", e.target.value)}
-                  placeholder="Převodem"
-                />
-              </Field>
-              <Field label="Stav">
-                <Select
-                  value={draft.status}
-                  onValueChange={(v) => set("status", v as InvoiceStatus)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUS_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
+      <div className="space-y-6">
+        <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+          <div className="min-w-0">
+            {/* Hlavička */}
+            <section className="space-y-4 rounded-lg" style={{ maxWidth: 504 }}>
+              <div>
+                <Field label="Klient">
+                  <Select
+                    value={draft.clientId ?? ""}
+                    onValueChange={(v) => selectClient(String(v ?? ""))}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Vyberte klienta">
+                        {(id: string | null) =>
+                          id
+                            ? (clients.find((c) => c._id === id)?.name ?? "")
+                            : "Vyberte klienta"
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.length === 0 ? (
+                        <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+                          Žádní klienti
+                        </div>
+                      ) : (
+                        clients.map((c) => (
+                          <SelectItem key={c._id} value={c._id}>
+                            {c.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+              <div className="grid gap-4">
+                <Field label="Datum vystavení">
+                  <DatePicker
+                    value={draft.issueDate}
+                    onChange={(iso) => set("issueDate", iso)}
+                  />
+                </Field>
+                <Field label="Způsob platby">
+                  <div className="flex gap-6">
+                    {PAYMENT_METHODS.map((o) => (
+                      <label
+                        key={o.value}
+                        className="flex items-center gap-2.5 cursor-pointer select-none"
+                      >
+                        <Checkbox
+                          checked={draft.paymentMethod === o.value}
+                          onCheckedChange={() => set("paymentMethod", o.value)}
+                        />
+                        <span className="text-sm">{o.label}</span>
+                      </label>
                     ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
-          </section>
+                  </div>
+                </Field>
+              </div>
+            </section>
+          </div>
 
-          {/* Položky */}
-          <section className="rounded-lg border">
-            <div className="flex items-center justify-between border-b px-4 py-3">
-              <h2 className="text-sm font-medium">Položky</h2>
+          {/* Souhrn */}
+          <aside className="lg:sticky lg:top-6 lg:self-start">
+            <div className="space-y-3 rounded-lg border p-4">
+              <h2 className="text-sm">Souhrn</h2>
+              <Separator />
+              {profile.vatPayer && (
+                <>
+                  <Row label="Základ" value={formatCZK(totals.subtotal)} />
+                  {totals.vatRows.map((r) => (
+                    <Row
+                      key={r.rate}
+                      label={`DPH ${r.rate} %`}
+                      value={formatCZK(r.vat)}
+                      muted
+                    />
+                  ))}
+                  <Separator />
+                </>
+              )}
+              <div className="flex items-center justify-between">
+                <span>K úhradě</span>
+                <span className="text-lg text-primary tabular-nums">
+                  {formatCZK(totals.total)}
+                </span>
+              </div>
+              {!profile.iban && (
+                <p className="text-xs text-muted-foreground">
+                  Doplňte IBAN v nastavení pro QR Platbu na PDF.
+                </p>
+              )}
+            </div>
+          </aside>
+        </div>
+
+        {/* Položky */}
+        <section className="rounded-lg border">
+          <div className="flex items-center justify-end border-b bg-muted/50 px-4 py-2.5 sm:hidden">
+            <Button variant="outline" size="sm" onClick={addItem}>
+              <Plus />
+              Přidat
+            </Button>
+          </div>
+          <div className="hidden border-b bg-muted/50 sm:grid sm:grid-cols-12 sm:items-center sm:gap-2 sm:px-4 sm:py-2.5">
+            <span className="col-span-3 text-xs tracking-wide text-muted-foreground uppercase">Popis</span>
+            <span className="col-span-2 text-xs tracking-wide text-muted-foreground uppercase">Počet</span>
+            <span className="col-span-2 text-xs tracking-wide text-muted-foreground uppercase">MJ</span>
+            <span className="col-span-2 text-xs tracking-wide text-muted-foreground uppercase">Cena/MJ</span>
+            {profile.vatPayer && <span className="col-span-2 text-xs tracking-wide text-muted-foreground uppercase">DPH %</span>}
+            <div className={profile.vatPayer ? "col-span-1 flex justify-end" : "col-span-3 flex justify-end"}>
               <Button variant="outline" size="sm" onClick={addItem}>
                 <Plus />
                 Přidat
               </Button>
             </div>
-            <div className="divide-y">
-              {draft.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="grid grid-cols-12 items-end gap-2 px-4 py-3"
-                >
-                  <div className="col-span-12 sm:col-span-5">
-                    <Label className="mb-1 text-xs text-muted-foreground">
-                      Popis
-                    </Label>
-                    <Input
-                      value={item.description}
-                      onChange={(e) =>
-                        updateItem(item.id, { description: e.target.value })
-                      }
-                      placeholder="Popis položky"
-                    />
-                  </div>
-                  <div className="col-span-4 sm:col-span-1">
-                    <Label className="mb-1 text-xs text-muted-foreground">
-                      Počet
-                    </Label>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      value={item.quantity}
-                      onChange={(e) =>
-                        updateItem(item.id, {
-                          quantity: Number(e.target.value),
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="col-span-4 sm:col-span-1">
-                    <Label className="mb-1 text-xs text-muted-foreground">
-                      MJ
-                    </Label>
-                    <Input
-                      value={item.unit}
-                      onChange={(e) =>
-                        updateItem(item.id, { unit: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="col-span-4 sm:col-span-2">
-                    <Label className="mb-1 text-xs text-muted-foreground">
-                      Cena/MJ
-                    </Label>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      value={item.unitPrice}
-                      onChange={(e) =>
-                        updateItem(item.id, {
-                          unitPrice: Number(e.target.value),
-                        })
-                      }
-                    />
-                  </div>
-                  {profile.vatPayer && (
-                    <div className="col-span-6 sm:col-span-2">
-                      <Label className="mb-1 text-xs text-muted-foreground">
-                        DPH %
-                      </Label>
-                      <Select
-                        value={String(item.vatRate)}
-                        onValueChange={(v) =>
-                          updateItem(item.id, { vatRate: Number(v) })
-                        }
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {VAT_RATES.map((r) => (
-                            <SelectItem key={r} value={String(r)}>
-                              {r} %
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  <div
-                    className={
-                      profile.vatPayer
-                        ? "col-span-6 flex items-center justify-end gap-2 sm:col-span-1"
-                        : "col-span-12 flex items-center justify-end gap-2 sm:col-span-3"
+          </div>
+          <div className="divide-y">
+            {draft.items.map((item) => (
+              <div
+                key={item.id}
+                className="grid grid-cols-12 items-end gap-2 px-4 py-3"
+              >
+                <div className="col-span-12 sm:col-span-3">
+                  <Label className="mb-1 text-xs text-muted-foreground sm:hidden">
+                    Popis
+                  </Label>
+                  <Input
+                    value={item.description}
+                    onChange={(e) =>
+                      updateItem(item.id, { description: e.target.value })
                     }
-                  >
-                    <span className="text-sm font-medium tabular-nums">
-                      {formatCZK(item.quantity * item.unitPrice)}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => removeItem(item.id)}
-                      aria-label="Odebrat položku"
-                    >
-                      <Trash2 />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              {draft.items.length === 0 && (
-                <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-                  Zatím žádné položky.
-                </p>
-              )}
-            </div>
-          </section>
-
-          {/* Poznámka */}
-          <section className="space-y-2 rounded-lg border p-4">
-            <Label htmlFor="note">Poznámka</Label>
-            <Textarea
-              id="note"
-              value={draft.note}
-              onChange={(e) => set("note", e.target.value)}
-              placeholder="Volitelná poznámka na faktuře…"
-            />
-          </section>
-        </div>
-
-        {/* Souhrn */}
-        <aside className="lg:sticky lg:top-6 lg:self-start">
-          <div className="space-y-3 rounded-lg border p-4">
-            <h2 className="text-sm font-medium">Souhrn</h2>
-            <Separator />
-            {profile.vatPayer && (
-              <>
-                <Row label="Základ" value={formatCZK(totals.subtotal)} />
-                {totals.vatRows.map((r) => (
-                  <Row
-                    key={r.rate}
-                    label={`DPH ${r.rate} %`}
-                    value={formatCZK(r.vat)}
-                    muted
+                    placeholder="Popis položky"
                   />
-                ))}
-                <Separator />
-              </>
-            )}
-            <div className="flex items-center justify-between">
-              <span className="font-medium">K úhradě</span>
-              <span className="text-lg font-semibold text-primary tabular-nums">
-                {formatCZK(totals.total)}
-              </span>
-            </div>
-            {!profile.iban && (
-              <p className="text-xs text-muted-foreground">
-                Doplňte IBAN v nastavení pro QR Platbu na PDF.
+                </div>
+                <div className="col-span-4 sm:col-span-2">
+                  <Label className="mb-1 text-xs text-muted-foreground sm:hidden">
+                    Počet
+                  </Label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    value={item.quantity}
+                    onChange={(e) =>
+                      updateItem(item.id, {
+                        quantity: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div className="col-span-4 sm:col-span-2">
+                  <Label className="mb-1 text-xs text-muted-foreground sm:hidden">
+                    MJ
+                  </Label>
+                  <Input
+                    value={item.unit}
+                    onChange={(e) =>
+                      updateItem(item.id, { unit: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="col-span-4 sm:col-span-2">
+                  <Label className="mb-1 text-xs text-muted-foreground sm:hidden">
+                    Cena/MJ
+                  </Label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    value={item.unitPrice}
+                    onChange={(e) =>
+                      updateItem(item.id, {
+                        unitPrice: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                {profile.vatPayer && (
+                  <div className="col-span-6 sm:col-span-2">
+                    <Label className="mb-1 text-xs text-muted-foreground sm:hidden">
+                      DPH %
+                    </Label>
+                    <Select
+                      value={String(item.vatRate)}
+                      onValueChange={(v) =>
+                        updateItem(item.id, { vatRate: Number(v) })
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {VAT_RATES.map((r) => (
+                          <SelectItem key={r} value={String(r)}>
+                            {r} %
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div
+                  className={
+                    profile.vatPayer
+                      ? "col-span-6 flex items-center justify-end gap-2 sm:col-span-1"
+                      : "col-span-12 flex items-center justify-end gap-2 sm:col-span-3"
+                  }
+                >
+                  <span className="text-sm tabular-nums">
+                    {formatCZK(item.quantity * item.unitPrice)}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => removeItem(item.id)}
+                    aria-label="Odebrat položku"
+                  >
+                    <Trash2 className="text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {draft.items.length === 0 && (
+              <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                Zatím žádné položky.
               </p>
             )}
           </div>
-        </aside>
+        </section>
       </div>
     </>
   )
@@ -484,6 +455,48 @@ function Field({
       <Label className="text-xs">{label}</Label>
       {children}
     </div>
+  )
+}
+
+function DatePicker({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (iso: string) => void
+}) {
+  const [open, setOpen] = React.useState(false)
+  const selected = value ? new Date(value + "T12:00:00") : undefined
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <Button variant="outline" className="w-full justify-start">
+            <CalendarIcon className="mr-2 size-4 text-muted-foreground" />
+            {value ? (
+              formatDate(value)
+            ) : (
+              <span className="text-muted-foreground">Vyberte datum</span>
+            )}
+          </Button>
+        }
+      />
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={selected}
+          locale={cs}
+          onSelect={(date) => {
+            if (date) {
+              const iso = date.toISOString().slice(0, 10)
+              onChange(iso)
+              setOpen(false)
+            }
+          }}
+        />
+      </PopoverContent>
+    </Popover>
   )
 }
 

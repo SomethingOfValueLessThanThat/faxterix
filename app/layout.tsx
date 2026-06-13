@@ -3,6 +3,7 @@ import { Geist_Mono, Outfit } from "next/font/google"
 
 import "./globals.css"
 import { Toaster } from "@/components/ui/sonner"
+import { AppShell } from "@/components/app-shell"
 import { cn } from "@/lib/utils"
 
 const outfit = Outfit({
@@ -36,7 +37,7 @@ export default function RootLayout({
       )}
     >
       <body>
-        {children}
+        <AppShell>{children}</AppShell>
         <Toaster />
       </body>
     </html>
