@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { FileText, Users, Settings } from "lucide-react"
+import { FileText, Users, Zap, Settings } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { useHotkeys } from "@/hooks/use-hotkeys"
@@ -13,7 +13,8 @@ import { routes } from "@/lib/routes"
 const nav = [
   { href: routes.invoices, label: "Faktury", icon: FileText, key: "1" },
   { href: routes.clients, label: "Klienti", icon: Users, key: "2" },
-  { href: routes.settings, label: "Nastavení", icon: Settings, key: "3" },
+  { href: routes.reports, label: "Reporty", icon: Zap, key: "3" },
+  { href: routes.settings, label: "Nastavení", icon: Settings, key: "4" },
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {

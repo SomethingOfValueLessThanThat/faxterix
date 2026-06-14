@@ -29,7 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useProfile, invoiceApi } from "@/lib/store"
+import { useProfile, useInvoiceApi } from "@/lib/store"
 import { computeTotals } from "@/lib/invoice"
 import { formatCZK, formatDate } from "@/lib/format"
 import { downloadInvoicePdf } from "@/lib/pdf/generate"
@@ -60,9 +60,52 @@ interface SortState {
   direction: SortDirection
 }
 
+function SortableHead({
+  sortKey,
+  sort,
+  onSort,
+  children,
+  align = "left",
+}: {
+  sortKey: SortKey
+  sort: SortState
+  onSort: (key: SortKey) => void
+  children: React.ReactNode
+  align?: "left" | "right"
+}) {
+  const active = sort.key === sortKey
+  const Icon = !active
+    ? ChevronsUpDown
+    : sort.direction === "asc"
+      ? ChevronUp
+      : ChevronDown
+  return (
+    <TableHead className={align === "right" ? "text-right" : undefined}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={cn(
+          "-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 uppercase transition-colors hover:text-foreground",
+          align === "right" && "flex-row-reverse",
+          active && "text-foreground"
+        )}
+      >
+        {children}
+        <Icon
+          className={cn(
+            "size-3.5 shrink-0",
+            active ? "opacity-100" : "opacity-40"
+          )}
+        />
+      </button>
+    </TableHead>
+  )
+}
+
 export function InvoiceTable({ invoices }: { invoices: Invoice[] }) {
   const router = useRouter()
   const profile = useProfile()
+  const invoiceApi = useInvoiceApi()
   const [sort, setSort] = React.useState<SortState>({
     key: "number",
     direction: "desc",
@@ -124,59 +167,36 @@ export function InvoiceTable({ invoices }: { invoices: Invoice[] }) {
     }
   }
 
-  function remove(id: string, number: string) {
-    invoiceApi.remove(id)
+  async function remove(id: string, number: string) {
+    await invoiceApi.remove(id)
     toast.success(`Faktura ${number} smazána.`)
-  }
-
-  function SortableHead({
-    sortKey,
-    children,
-    align = "left",
-  }: {
-    sortKey: SortKey
-    children: React.ReactNode
-    align?: "left" | "right"
-  }) {
-    const active = sort.key === sortKey
-    const Icon = !active
-      ? ChevronsUpDown
-      : sort.direction === "asc"
-        ? ChevronUp
-        : ChevronDown
-    return (
-      <TableHead className={align === "right" ? "text-right" : undefined}>
-        <button
-          type="button"
-          onClick={() => toggleSort(sortKey)}
-          className={cn(
-            "-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 uppercase transition-colors hover:text-foreground",
-            align === "right" && "flex-row-reverse",
-            active && "text-foreground"
-          )}
-        >
-          {children}
-          <Icon
-            className={cn(
-              "size-3.5 shrink-0",
-              active ? "opacity-100" : "opacity-40"
-            )}
-          />
-        </button>
-      </TableHead>
-    )
   }
 
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <SortableHead sortKey="number">Číslo</SortableHead>
-          <SortableHead sortKey="client">Klient</SortableHead>
-          <SortableHead sortKey="issueDate">Vystaveno</SortableHead>
-          <SortableHead sortKey="dueDate">Splatnost</SortableHead>
-          <SortableHead sortKey="status">Stav</SortableHead>
-          <SortableHead sortKey="total" align="right">
+          <SortableHead sortKey="number" sort={sort} onSort={toggleSort}>
+            Číslo
+          </SortableHead>
+          <SortableHead sortKey="client" sort={sort} onSort={toggleSort}>
+            Klient
+          </SortableHead>
+          <SortableHead sortKey="issueDate" sort={sort} onSort={toggleSort}>
+            Vystaveno
+          </SortableHead>
+          <SortableHead sortKey="dueDate" sort={sort} onSort={toggleSort}>
+            Splatnost
+          </SortableHead>
+          <SortableHead sortKey="status" sort={sort} onSort={toggleSort}>
+            Stav
+          </SortableHead>
+          <SortableHead
+            sortKey="total"
+            align="right"
+            sort={sort}
+            onSort={toggleSort}
+          >
             Částka
           </SortableHead>
           <TableHead className="w-10" />

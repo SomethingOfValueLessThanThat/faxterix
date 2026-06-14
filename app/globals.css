@@ -23,6 +23,11 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -51,6 +56,11 @@
   --border: #e5e5e5;
   --input: #e5e5e5;
   --ring: #a3a3a3;
+  --chart-1: #171717;
+  --chart-2: #525252;
+  --chart-3: #a3a3a3;
+  --chart-4: #2563eb;
+  --chart-5: #16a34a;
 }
 
 .dark {
@@ -72,6 +82,11 @@
   --border: #ffffff1a;
   --input: #ffffff26;
   --ring: #737373;
+  --chart-1: #fafafa;
+  --chart-2: #a3a3a3;
+  --chart-3: #525252;
+  --chart-4: #60a5fa;
+  --chart-5: #4ade80;
 }
 
 @layer base {

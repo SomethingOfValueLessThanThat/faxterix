@@ -4,7 +4,7 @@ import { Pencil, Trash2, Mail } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import { clientApi } from "@/lib/store"
+import { useClientApi } from "@/lib/store"
 import type { Client } from "@/lib/types"
 
 export function ClientCard({
@@ -14,8 +14,10 @@ export function ClientCard({
   client: Client
   onEdit: (client: Client) => void
 }) {
-  function remove() {
-    clientApi.remove(client._id)
+  const clientApi = useClientApi()
+
+  async function remove() {
+    await clientApi.remove(client._id)
     toast.success(`Klient ${client.name} smazán.`)
   }
 

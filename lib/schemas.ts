@@ -104,6 +104,8 @@ export const companyProfileSchema = z.object({
   bankAccount: optionalBankAccount,
   dueDays: dueDaysSchema,
   numberFormat: z.string().min(1, "Formát čísla faktury nesmí být prázdný."),
+  selectedBand: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  bandLimits: z.array(z.number()).min(3).max(3),
 })
 
 /** Klient při ručním vyplnění / úpravě. */

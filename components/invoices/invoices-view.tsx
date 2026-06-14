@@ -11,7 +11,7 @@ import { PageContainer } from "@/components/page-container"
 import { Kbd } from "@/components/kbd"
 import { InvoiceTable } from "@/components/invoices/invoice-table"
 import { useHotkeys } from "@/hooks/use-hotkeys"
-import { useInvoices, useClients, dataApi } from "@/lib/store"
+import { useInvoices, useClients, useDataApi } from "@/lib/store"
 import { parseFakturoidCsv } from "@/lib/import-csv"
 import { routes } from "@/lib/routes"
 
@@ -19,6 +19,7 @@ export function InvoicesView() {
   const router = useRouter()
   const invoices = useInvoices()
   const clients = useClients()
+  const dataApi = useDataApi()
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   const createInvoice = React.useCallback(
@@ -45,7 +46,7 @@ export function InvoicesView() {
           return
         }
 
-        dataApi.importData(result.clients, result.invoices)
+        await dataApi.importData(result.clients, result.invoices)
         toast.success(
           `Naimportováno ${result.invoices.length} ${pluralizeInvoices(
             result.invoices.length
@@ -57,7 +58,7 @@ export function InvoicesView() {
         toast.error("Soubor se nepodařilo načíst. Zkontrolujte formát CSV.")
       }
     },
-    [clients, invoices]
+    [clients, invoices, dataApi]
   )
 
   useHotkeys([{ key: "n", handler: createInvoice }], [createInvoice])

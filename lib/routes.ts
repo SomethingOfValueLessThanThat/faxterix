@@ -5,5 +5,6 @@ export const routes = {
   newInvoice: "/invoices/new",
   invoice: (id: string) => `/invoices/${id}`,
   clients: "/clients",
+  reports: "/reports",
   settings: "/settings",
 } as const

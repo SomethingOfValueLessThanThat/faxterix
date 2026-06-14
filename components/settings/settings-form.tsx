@@ -1,17 +1,23 @@
 "use client"
 
 import * as React from "react"
-import { Save, Download, Loader2, Check } from "lucide-react"
+import { Download, Loader2, Check } from "lucide-react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/page-header"
-import { Kbd } from "@/components/kbd"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useHotkeys } from "@/hooks/use-hotkeys"
 import { formatCzechPhone } from "@/lib/format"
-import { useProfile, profileApi } from "@/lib/store"
+import { useProfile, useProfileApi } from "@/lib/store"
 import {
   companyProfileSchema,
   aresResultSchema,
@@ -20,25 +26,31 @@ import {
 } from "@/lib/schemas"
 import type { CompanyProfile } from "@/lib/types"
 
+const BAND_LIMITS = [1_000_000, 1_500_000, 2_000_000]
+
 export function SettingsForm() {
   const profile = useProfile()
+  const profileApi = useProfileApi()
   const [draft, setDraft] = React.useState<CompanyProfile>(profile)
   const [errors, setErrors] = React.useState<Record<string, string>>({})
   const [loadingAres, setLoadingAres] = React.useState(false)
 
-  // Seed the draft from the store once it has hydrated from localStorage.
-  const synced = React.useRef(false)
-  React.useEffect(() => {
-    if (!synced.current) {
-      setDraft(profile)
-      synced.current = true
-    }
-  }, [profile])
+  // Profil přichází z Convexu asynchronně. Dokud uživatel formulář neupravil,
+  // sejmeme do draftu poslední načtený profil; po první editaci ho nepřepisujeme.
+  // Synchronizace probíhá během renderu (ne v efektu), aby nedocházelo
+  // ke kaskádovým renderům.
+  const [dirty, setDirty] = React.useState(false)
+  const [syncedProfile, setSyncedProfile] = React.useState(profile)
+  if (!dirty && profile !== syncedProfile) {
+    setSyncedProfile(profile)
+    setDraft(profile)
+  }
 
   const setField = <K extends keyof CompanyProfile>(
     key: K,
     value: CompanyProfile[K]
   ) => {
+    setDirty(true)
     setDraft((d) => ({ ...d, [key]: value }))
     setErrors((e) => {
       if (!(key in e)) return e
@@ -48,7 +60,7 @@ export function SettingsForm() {
     })
   }
 
-  function save() {
+  async function save() {
     const result = companyProfileSchema.safeParse(draft)
     if (!result.success) {
       setErrors(fieldErrors(result.error))
@@ -56,7 +68,7 @@ export function SettingsForm() {
       return
     }
     setErrors({})
-    profileApi.save(draft)
+    await profileApi.save(draft)
     toast.success("Nastavení uloženo.")
   }
 
@@ -86,6 +98,7 @@ export function SettingsForm() {
         return
       }
       const data = parsed.data
+      setDirty(true)
       setDraft((d) => ({
         ...d,
         name: data.name || d.name,
@@ -196,6 +209,29 @@ export function SettingsForm() {
               onChange={(e) => setField("dueDays", Number(e.target.value))}
               aria-invalid={!!errors.dueDays || undefined}
             />
+          </SettingsField>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-sm">Paušální daň</h2>
+          <SettingsField label="Pásmo paušální daně">
+            <Select
+              value={String(draft.selectedBand)}
+              onValueChange={(v) => {
+                const band = Number(v) as 1 | 2 | 3
+                setField("selectedBand", band)
+                setField("bandLimits", BAND_LIMITS)
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1. pásmo — do 1 000 000 Kč</SelectItem>
+                <SelectItem value="2">2. pásmo — do 1 500 000 Kč</SelectItem>
+                <SelectItem value="3">3. pásmo — do 2 000 000 Kč</SelectItem>
+              </SelectContent>
+            </Select>
           </SettingsField>
         </section>
       </div>

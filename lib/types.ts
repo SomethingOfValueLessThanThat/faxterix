@@ -77,6 +77,10 @@ export interface CompanyProfile {
   dueDays: number
   /** Předčíslí / formát čísla faktury, např. "{YYYY}{NNNN}". */
   numberFormat: string
+  /** Vybrané pasmo (1, 2, nebo 3). */
+  selectedBand: 1 | 2 | 3
+  /** Limity pro jednotlivá pasma [1. pasmo, 2. pasmo, 3. pasmo]. */
+  bandLimits: number[]
 }
 
 export const emptyAddress = (): Address => ({

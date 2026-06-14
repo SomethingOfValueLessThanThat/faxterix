@@ -1,20 +1,15 @@
 "use client"
 
-// Lokální „mock" backend nad localStorage s reaktivním čtením přes
-// useSyncExternalStore. API (useClients, useInvoices, useProfile) je záměrně
-// tvarováno jako Convex hooky, aby se dal backend později vyměnit za Convex.
+// Datová vrstva nad Convex. Čtení přes `useQuery`, zápis přes `useMutation`
+// zabalený do malých „api" hooků (useClientApi/useInvoiceApi/…), aby volání ve
+// komponentách zůstala čitelná. Tvar hooků kopíruje původní lokální store.
 
 import * as React from "react"
+import { useQuery, useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import type { Id } from "@/convex/_generated/dataModel"
 import type { Client, Invoice, CompanyProfile } from "./types"
 import { emptyAddress } from "./types"
-
-const STORAGE_KEY = "faxterix:v1"
-
-interface DbShape {
-  clients: Client[]
-  invoices: Invoice[]
-  profile: CompanyProfile
-}
 
 const defaultProfile: CompanyProfile = {
   name: "",
@@ -28,181 +23,149 @@ const defaultProfile: CompanyProfile = {
   bankAccount: "",
   dueDays: 14,
   numberFormat: "{YYYY}{NNNN}",
+  selectedBand: 1,
+  bandLimits: [1_000_000, 1_500_000, 2_000_000],
 }
-
-function emptyDb(): DbShape {
-  return { clients: [], invoices: [], profile: defaultProfile }
-}
-
-// --- jednoduchý externí store ---------------------------------------------
-
-let memory: DbShape | null = null
-// Stabilní reference pro server snapshot (jinak useSyncExternalStore cyklí).
-const SERVER_SNAPSHOT: DbShape = emptyDb()
-const listeners = new Set<() => void>()
-
-function read(): DbShape {
-  if (memory) return memory
-  if (typeof window === "undefined") {
-    memory = emptyDb()
-    return memory
-  }
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    memory = raw ? { ...emptyDb(), ...JSON.parse(raw) } : emptyDb()
-  } catch {
-    memory = emptyDb()
-  }
-  return memory as DbShape
-}
-
-function write(next: DbShape) {
-  memory = next
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-  }
-  listeners.forEach((l) => l())
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener)
-  // synchronizace mezi záložkami
-  const onStorage = (e: StorageEvent) => {
-    if (e.key === STORAGE_KEY) {
-      memory = null
-      listener()
-    }
-  }
-  if (typeof window !== "undefined")
-    window.addEventListener("storage", onStorage)
-  return () => {
-    listeners.delete(listener)
-    if (typeof window !== "undefined")
-      window.removeEventListener("storage", onStorage)
-  }
-}
-
-function useDb(): DbShape {
-  return React.useSyncExternalStore(subscribe, read, () => SERVER_SNAPSHOT)
-}
-
-function update(mutator: (db: DbShape) => DbShape) {
-  write(mutator(read()))
-}
-
-const now = () => Date.now()
-const newId = () => crypto.randomUUID()
 
 // --- Klienti ---------------------------------------------------------------
 
 export function useClients(): Client[] {
-  return useDb().clients
+  return useQuery(api.clients.list) ?? []
 }
 
 export function useClient(id: string | null | undefined): Client | undefined {
-  const clients = useClients()
-  return React.useMemo(() => clients.find((c) => c._id === id), [clients, id])
+  const client = useQuery(
+    api.clients.get,
+    id ? { id: id as Id<"clients"> } : "skip"
+  )
+  return client ?? undefined
 }
 
-export const clientApi = {
-  create(data: Omit<Client, "_id" | "createdAt" | "updatedAt">): string {
-    const id = newId()
-    update((db) => ({
-      ...db,
-      clients: [
-        ...db.clients,
-        { ...data, _id: id, createdAt: now(), updatedAt: now() },
-      ],
-    }))
-    return id
-  },
-  patch(id: string, data: Partial<Client>) {
-    update((db) => ({
-      ...db,
-      clients: db.clients.map((c) =>
-        c._id === id ? { ...c, ...data, updatedAt: now() } : c
-      ),
-    }))
-  },
-  remove(id: string) {
-    update((db) => ({
-      ...db,
-      clients: db.clients.filter((c) => c._id !== id),
-    }))
-  },
+type ClientInput = Omit<Client, "_id" | "createdAt" | "updatedAt">
+
+export function useClientApi() {
+  const create = useMutation(api.clients.create)
+  const patch = useMutation(api.clients.patch)
+  const remove = useMutation(api.clients.remove)
+
+  return React.useMemo(
+    () => ({
+      create: (data: ClientInput) => create(data),
+      patch: (id: string, data: Partial<ClientInput>) =>
+        patch({ id: id as Id<"clients">, ...data }),
+      remove: (id: string) => remove({ id: id as Id<"clients"> }),
+    }),
+    [create, patch, remove]
+  )
 }
 
 // --- Faktury ---------------------------------------------------------------
 
 export function useInvoices(): Invoice[] {
-  const invoices = useDb().invoices
-  return React.useMemo(
-    () => [...invoices].sort((a, b) => b.issueDate.localeCompare(a.issueDate)),
-    [invoices]
-  )
+  // Query vrací faktury seřazené podle data vystavení (nejnovější nahoře).
+  return useQuery(api.invoices.list) ?? []
 }
 
 export function useInvoice(id: string | null | undefined): Invoice | undefined {
-  const invoices = useDb().invoices
-  return React.useMemo(() => invoices.find((i) => i._id === id), [invoices, id])
+  const invoice = useQuery(
+    api.invoices.get,
+    id ? { id: id as Id<"invoices"> } : "skip"
+  )
+  return invoice ?? undefined
 }
 
-export const invoiceApi = {
-  create(data: Omit<Invoice, "_id" | "createdAt" | "updatedAt">): string {
-    const id = newId()
-    update((db) => ({
-      ...db,
-      invoices: [
-        ...db.invoices,
-        { ...data, _id: id, createdAt: now(), updatedAt: now() },
-      ],
-    }))
-    return id
-  },
-  patch(id: string, data: Partial<Invoice>) {
-    update((db) => ({
-      ...db,
-      invoices: db.invoices.map((i) =>
-        i._id === id ? { ...i, ...data, updatedAt: now() } : i
-      ),
-    }))
-  },
-  remove(id: string) {
-    update((db) => ({
-      ...db,
-      invoices: db.invoices.filter((i) => i._id !== id),
-    }))
-  },
-  /** Import více faktur najednou (např. ze starého systému). */
-  importMany(invoices: Invoice[]) {
-    update((db) => ({ ...db, invoices: [...db.invoices, ...invoices] }))
-  },
+// Vybere jen pole, která se ukládají (bez _id/_creationTime/timestamps).
+function invoicePayload(inv: Invoice) {
+  return {
+    number: inv.number,
+    clientId: (inv.clientId as Id<"clients"> | null) ?? null,
+    client: inv.client,
+    issueDate: inv.issueDate,
+    dueDate: inv.dueDate,
+    taxDate: inv.taxDate,
+    items: inv.items,
+    status: inv.status,
+    note: inv.note,
+    variableSymbol: inv.variableSymbol,
+    paymentMethod: inv.paymentMethod,
+  }
+}
+
+export function useInvoiceApi() {
+  const create = useMutation(api.invoices.create)
+  const patch = useMutation(api.invoices.patch)
+  const remove = useMutation(api.invoices.remove)
+
+  return React.useMemo(
+    () => ({
+      create: (data: Invoice) => create(invoicePayload(data)),
+      patch: (id: string, data: Invoice) =>
+        patch({ id: id as Id<"invoices">, ...invoicePayload(data) }),
+      remove: (id: string) => remove({ id: id as Id<"invoices"> }),
+    }),
+    [create, patch, remove]
+  )
 }
 
 // --- Hromadný import -------------------------------------------------------
 
-export const dataApi = {
-  /**
-   * Zapíše naimportované klienty i faktury jedním zápisem. Deduplikace se řeší
-   * při sestavení dat (viz `parseFakturoidCsv`), zde se pouze připojí.
-   */
-  importData(clients: Client[], invoices: Invoice[]) {
-    update((db) => ({
-      ...db,
-      clients: [...db.clients, ...clients],
-      invoices: [...db.invoices, ...invoices],
-    }))
-  },
+export function useDataApi() {
+  const importDataMut = useMutation(api.data.importData)
+
+  return React.useMemo(
+    () => ({
+      importData: (clients: Client[], invoices: Invoice[]) =>
+        importDataMut({
+          clients,
+          invoices: invoices.map((inv) => ({
+            ...inv,
+            clientId: inv.clientId ?? null,
+          })),
+        }),
+    }),
+    [importDataMut]
+  )
 }
 
 // --- Profil firmy ----------------------------------------------------------
 
 export function useProfile(): CompanyProfile {
-  return useDb().profile
+  const raw = useQuery(api.profile.get)
+  // Memoizujeme, aby byl profil referenčně stabilní (useQuery vrací stabilní
+  // `raw`); jinak by každý render vytvořil nový objekt a rozbil porovnání.
+  return React.useMemo(() => {
+    if (!raw) return defaultProfile
+    return {
+      ...defaultProfile,
+      ...raw,
+      bandLimits: raw.bandLimits ?? defaultProfile.bandLimits,
+      selectedBand: raw.selectedBand ?? defaultProfile.selectedBand,
+    }
+  }, [raw])
 }
 
-export const profileApi = {
-  save(profile: CompanyProfile) {
-    update((db) => ({ ...db, profile }))
-  },
+export function useProfileApi() {
+  const save = useMutation(api.profile.save)
+
+  return React.useMemo(
+    () => ({
+      save: (profile: CompanyProfile) =>
+        save({
+          name: profile.name,
+          ico: profile.ico,
+          dic: profile.dic,
+          vatPayer: profile.vatPayer,
+          address: profile.address,
+          email: profile.email,
+          phone: profile.phone,
+          iban: profile.iban,
+          bankAccount: profile.bankAccount,
+          dueDays: profile.dueDays,
+          numberFormat: profile.numberFormat,
+          selectedBand: profile.selectedBand,
+          bandLimits: profile.bandLimits,
+        }),
+    }),
+    [save]
+  )
 }

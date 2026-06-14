@@ -31,7 +31,6 @@ export function useHotkeys(
   hotkeys: Hotkey[],
   // Deps nejsou potřeba (handlery se čtou přes ref), ale podporujeme je
   // pro zpětnou kompatibilitu volajících.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _deps?: React.DependencyList
 ) {
   const ref = React.useRef(hotkeys)

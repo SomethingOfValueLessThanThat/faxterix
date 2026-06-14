@@ -57,7 +57,14 @@ export function round2(n: number): number {
 }
 
 /**
- * Vygeneruje další číslo faktury podle formátu profilu.
+ * Vygeneruje další číslo faktury.
+ *
+ * Pokud už pro aktuální rok nějaká faktura existuje (např. po importu), navážeme
+ * na ni: zachováme její prefix i šířku pořadového čísla (zarovnání nulami) a jen
+ * zvýšíme nejvyšší pořadí o jedna. Tím nová čísla odpovídají dosavadnímu
+ * číslování bez ohledu na výchozí formát.
+ *
+ * Když pro daný rok žádná faktura není, použije se formát z profilu.
  * Podporované tokeny: {YYYY} rok, {MM} měsíc, {NNNN}/{NNN}/{NN} pořadové číslo.
  */
 export function nextInvoiceNumber(
@@ -66,19 +73,41 @@ export function nextInvoiceNumber(
   date = new Date()
 ): string {
   const year = date.getFullYear()
+  const yearStr = String(year)
+
+  // Faktury aktuálního roku poznáme podle prefixu čísla (spolehlivější než
+  // parsování data, které může mít z importu nečekaný formát).
+  const thisYear = existing.filter((inv) => inv.number.startsWith(yearStr))
+
+  let prefix: string | null = null
+  let width = 0
+  let maxSeq = 0
+  for (const inv of thisYear) {
+    // Pořadové číslo = poslední skupina číslic v čísle faktury.
+    const m = inv.number.match(/(\d+)\s*$/)
+    if (!m) continue
+    const seqStr = m[1]
+    const seq = Number(seqStr)
+    if (seq > maxSeq) {
+      maxSeq = seq
+      width = seqStr.length
+      prefix = inv.number.slice(0, inv.number.length - seqStr.length)
+    }
+  }
+
+  if (prefix !== null) {
+    return prefix + String(maxSeq + 1).padStart(width, "0")
+  }
+
+  // Fallback: žádná faktura pro letošek – sestavíme číslo z formátu profilu.
   const format = profile.numberFormat || "{YYYY}{NNNN}"
-
-  // Pořadové číslo = počet faktur ve stejném roce + 1.
-  const seq =
-    existing.filter((inv) => new Date(inv.issueDate).getFullYear() === year)
-      .length + 1
-
+  const seq = thisYear.length + 1
   return format
-    .replace("{YYYY}", String(year))
+    .replace("{YYYY}", yearStr)
     .replace("{MM}", String(date.getMonth() + 1).padStart(2, "0"))
     .replace(/\{N+\}/g, (token) => {
-      const width = token.length - 2
-      return String(seq).padStart(width, "0")
+      const tokenWidth = token.length - 2
+      return String(seq).padStart(tokenWidth, "0")
     })
 }
 

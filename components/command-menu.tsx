@@ -2,7 +2,14 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { FileText, Users, Settings, Plus, FileDown } from "lucide-react"
+import {
+  FileText,
+  Users,
+  ChartColumn,
+  Settings,
+  Plus,
+  FileDown,
+} from "lucide-react"
 
 import {
   CommandDialog,
@@ -11,7 +18,6 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandShortcut,
 } from "@/components/ui/command"
 import { useHotkeys } from "@/hooks/use-hotkeys"
 import { useInvoices } from "@/lib/store"
@@ -63,6 +69,10 @@ export function CommandMenu() {
           <CommandItem onSelect={() => go(routes.clients)}>
             <Users />
             Klienti
+          </CommandItem>
+          <CommandItem onSelect={() => go(routes.reports)}>
+            <ChartColumn />
+            Reporty
           </CommandItem>
           <CommandItem onSelect={() => go(routes.settings)}>
             <Settings />

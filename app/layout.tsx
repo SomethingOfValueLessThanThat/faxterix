@@ -4,6 +4,7 @@ import { Geist_Mono, Outfit } from "next/font/google"
 import "./globals.css"
 import { Toaster } from "@/components/ui/sonner"
 import { AppShell } from "@/components/app-shell"
+import { ConvexClientProvider } from "@/components/convex-provider"
 import { cn } from "@/lib/utils"
 
 const outfit = Outfit({
@@ -37,7 +38,9 @@ export default function RootLayout({
       )}
     >
       <body>
-        <AppShell>{children}</AppShell>
+        <ConvexClientProvider>
+          <AppShell>{children}</AppShell>
+        </ConvexClientProvider>
         <Toaster />
       </body>
     </html>

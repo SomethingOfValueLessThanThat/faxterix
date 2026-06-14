@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Trash2, FileDown, Save, ArrowLeft, Check } from "lucide-react"
+import { Plus, Trash2, FileDown, ArrowLeft, Check } from "lucide-react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/page-header"
@@ -18,14 +18,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { cn } from "@/lib/utils"
 import { useHotkeys } from "@/hooks/use-hotkeys"
 import {
   useClients,
   useProfile,
   useInvoice,
   useInvoices,
-  invoiceApi,
+  useInvoiceApi,
 } from "@/lib/store"
 import { computeTotals, emptyItem, nextInvoiceNumber } from "@/lib/invoice"
 import { invoiceDraftSchema, fieldErrors, firstError } from "@/lib/schemas"
@@ -73,13 +72,15 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
   const profile = useProfile()
   const invoices = useInvoices()
   const existing = useInvoice(invoiceId)
+  const invoiceApi = useInvoiceApi()
 
   const [draft, setDraft] = React.useState<Invoice>(() =>
     existing ? structuredClone(existing) : createDraft(invoices, profile)
   )
   const [errors, setErrors] = React.useState<Record<string, string>>({})
-  // Pokud se existující faktura načte později (hydratace), promítneme ji.
-  const loadedId = React.useRef(invoiceId)
+  // Faktura z Convexu přichází asynchronně – jakmile dorazí, promítneme ji do
+  // draftu. Ref drží id už načtené faktury, aby se nepřepisovaly úpravy uživatele.
+  const loadedId = React.useRef<string | null>(null)
   React.useEffect(() => {
     if (existing && loadedId.current !== existing._id) {
       setDraft(structuredClone(existing))
@@ -142,26 +143,26 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
     return true
   }
 
-  function persist(): Invoice {
+  async function persist(): Promise<Invoice> {
     const toSave = { ...draft, status: "sent" as InvoiceStatus }
     if (existing) {
-      invoiceApi.patch(existing._id, toSave)
+      await invoiceApi.patch(existing._id, toSave)
       return toSave
     }
-    const id = invoiceApi.create(toSave)
+    const id = await invoiceApi.create(toSave)
     return { ...toSave, _id: id }
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!validate()) return
-    const saved = persist()
+    const saved = await persist()
     toast.success(`Faktura ${saved.number} uložena.`)
     router.push(routes.invoices)
   }
 
   async function handlePdf() {
     if (!validate()) return
-    const saved = persist()
+    const saved = await persist()
     try {
       await downloadInvoicePdf(saved, profile)
     } catch (err) {
@@ -597,13 +598,23 @@ function QrPreview({
   profile: CompanyProfile
   total: number
 }) {
-  const [dataUrl, setDataUrl] = React.useState<string | null>(null)
+  // Klíč popisuje vstupy QR kódu. Pokud nejsou platné, je null a QR se nezobrazí.
+  const qrKey =
+    profile.iban && total > 0
+      ? JSON.stringify({
+          iban: profile.iban,
+          name: profile.name,
+          total,
+          variableSymbol: invoice.variableSymbol,
+          number: invoice.number,
+          dueDate: invoice.dueDate,
+        })
+      : null
+
+  const [qr, setQr] = React.useState<{ key: string; url: string } | null>(null)
 
   React.useEffect(() => {
-    if (!profile.iban || total <= 0) {
-      setDataUrl(null)
-      return
-    }
+    if (!qrKey) return
     let active = true
     const payload = buildSpayd({
       iban: profile.iban,
@@ -618,15 +629,16 @@ function QrPreview({
         QRCode.toDataURL(payload, { margin: 1, width: 320 })
       )
       .then((url) => {
-        if (active) setDataUrl(url)
+        if (active) setQr({ key: qrKey, url })
       })
       .catch(() => {
-        if (active) setDataUrl(null)
+        if (active) setQr(null)
       })
     return () => {
       active = false
     }
   }, [
+    qrKey,
     profile.iban,
     profile.name,
     total,
@@ -635,6 +647,8 @@ function QrPreview({
     invoice.dueDate,
   ])
 
+  // Zobrazíme QR jen pokud odpovídá aktuálním vstupům (jinak je zastaralý).
+  const dataUrl = qr && qr.key === qrKey ? qr.url : null
   if (!dataUrl) return null
 
   return (

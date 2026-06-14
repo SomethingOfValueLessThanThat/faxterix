@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { clientApi } from "@/lib/store"
+import { useClientApi } from "@/lib/store"
 import { emptyAddress } from "@/lib/types"
 import {
   clientDraftSchema,
@@ -66,6 +66,7 @@ function ClientForm({
   client?: Client
   onClose: () => void
 }) {
+  const clientApi = useClientApi()
   const [draft, setDraft] = React.useState<Draft>(() =>
     client ? structuredClone(client) : blankDraft()
   )
@@ -124,7 +125,7 @@ function ClientForm({
       try {
         const fetched = await fetchFromAres(result.data.replace(/\s+/g, ""))
         if (!fetched) return
-        clientApi.create(fetched)
+        await clientApi.create(fetched)
         toast.success("Klient přidán.")
         onClose()
       } catch {
@@ -142,7 +143,7 @@ function ClientForm({
       return
     }
     setErrors({})
-    clientApi.patch(client._id, draft)
+    await clientApi.patch(client._id, draft)
     toast.success("Klient uložen.")
     onClose()
   }
