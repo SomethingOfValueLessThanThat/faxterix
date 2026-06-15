@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Plus, Users } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { FadeIn, Stagger } from "@/components/motion"
 import { PageHeader } from "@/components/page-header"
 import { PageContainer } from "@/components/page-container"
 import { ClientDialog } from "@/components/client-dialog"
@@ -59,7 +60,7 @@ function ClientsContent() {
       />
 
       {clients.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
+        <FadeIn className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
           <Users className="size-8 text-muted-foreground" />
           <h2 className="mt-4">Adresář je prázdný</h2>
           <p className="mt-1 max-w-sm text-sm text-balance text-muted-foreground">
@@ -69,13 +70,13 @@ function ClientsContent() {
             <Plus />
             Nový klient
           </Button>
-        </div>
+        </FadeIn>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <Stagger className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {clients.map((client) => (
             <ClientCard key={client._id} client={client} onEdit={openEdit} />
           ))}
-        </div>
+        </Stagger>
       )}
 
       <ClientDialog

@@ -3,7 +3,9 @@
 import * as React from "react"
 import { Download, Loader2, Check } from "lucide-react"
 import { toast } from "sonner"
+import { motion, AnimatePresence } from "motion/react"
 
+import { Stagger, fadeInUp, transitions } from "@/components/motion"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -127,8 +129,8 @@ export function SettingsForm() {
         }
       />
 
-      <div className="max-w-[504px] space-y-6">
-        <section className="space-y-4">
+      <Stagger className="max-w-[504px] space-y-6">
+        <motion.section variants={fadeInUp} className="space-y-4">
           <h2 className="text-sm">Dodavatel</h2>
           <div className="space-y-1.5">
             <Label>IČO</Label>
@@ -174,9 +176,9 @@ export function SettingsForm() {
               aria-invalid={!!errors.phone || undefined}
             />
           </SettingsField>
-        </section>
+        </motion.section>
 
-        <section className="space-y-4">
+        <motion.section variants={fadeInUp} className="space-y-4">
           <div>
             <h2 className="text-sm">Platební údaje</h2>
             <p className="text-xs text-muted-foreground">
@@ -191,9 +193,9 @@ export function SettingsForm() {
               aria-invalid={!!errors.bankAccount || undefined}
             />
           </SettingsField>
-        </section>
+        </motion.section>
 
-        <section className="space-y-4">
+        <motion.section variants={fadeInUp} className="space-y-4">
           <h2 className="text-sm">Fakturace</h2>
           <SettingsField label="Splatnost (dní)" error={errors.dueDays}>
             <Input
@@ -203,9 +205,9 @@ export function SettingsForm() {
               aria-invalid={!!errors.dueDays || undefined}
             />
           </SettingsField>
-        </section>
+        </motion.section>
 
-        <section className="space-y-4">
+        <motion.section variants={fadeInUp} className="space-y-4">
           <h2 className="text-sm">Paušální daň</h2>
           <SettingsField label="Pásmo paušální daně">
             <Select
@@ -234,14 +236,22 @@ export function SettingsForm() {
               onChange={(e) => setField("flatTaxMonthly", Number(e.target.value))}
             />
           </SettingsField>
-        </section>
+        </motion.section>
 
-        {dirty && (
-          <span className="inline-block rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs text-amber-700">
-            Neuložené změny
-          </span>
-        )}
-      </div>
+        <AnimatePresence>
+          {dirty && (
+            <motion.span
+              initial={{ opacity: 0, y: 6, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 6, scale: 0.95 }}
+              transition={transitions.springSnappy}
+              className="inline-block rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs text-amber-700"
+            >
+              Neuložené změny
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </Stagger>
     </>
   )
 }

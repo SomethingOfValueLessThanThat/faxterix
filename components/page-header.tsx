@@ -1,5 +1,10 @@
+"use client"
+
 import * as React from "react"
+import { motion } from "motion/react"
+
 import { cn } from "@/lib/utils"
+import { transitions } from "@/components/motion"
 
 export function PageHeader({
   title,
@@ -13,7 +18,10 @@ export function PageHeader({
   className?: string
 }) {
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={transitions.easeOut}
       className={cn(
         "flex flex-wrap items-end justify-between gap-3 border-b pb-4 mb-6",
         className
@@ -30,6 +38,6 @@ export function PageHeader({
       {actions ? (
         <div className="flex items-center gap-2">{actions}</div>
       ) : null}
-    </div>
+    </motion.div>
   )
 }

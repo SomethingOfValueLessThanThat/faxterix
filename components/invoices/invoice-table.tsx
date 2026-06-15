@@ -12,12 +12,13 @@ import {
   ChevronsUpDown,
 } from "lucide-react"
 import { toast } from "sonner"
+import { motion } from "motion/react"
 
+import { staggerContainer, fadeInUp } from "@/components/motion"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Table,
-  TableBody,
   TableCell,
   TableHead,
   TableHeader,
@@ -217,14 +218,20 @@ export function InvoiceTable({ invoices }: { invoices: Invoice[] }) {
           <TableHead className="w-10" />
         </TableRow>
       </TableHeader>
-      <TableBody>
+      <motion.tbody
+        className="[&_tr:last-child]:border-0"
+        variants={staggerContainer}
+        initial="hidden"
+        animate="show"
+      >
         {sortedInvoices.map((invoice) => {
           const total = totals.get(invoice._id) ?? 0
           const meta = statusMeta[invoice.status]
           return (
-            <TableRow
+            <motion.tr
               key={invoice._id}
-              className="cursor-pointer"
+              variants={fadeInUp}
+              className="cursor-pointer border-b border-border transition-colors hover:bg-muted/30"
               onClick={() => router.push(routes.invoice(invoice._id))}
             >
               <TableCell>{invoice.number}</TableCell>
@@ -272,10 +279,10 @@ export function InvoiceTable({ invoices }: { invoices: Invoice[] }) {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </TableCell>
-            </TableRow>
+            </motion.tr>
           )
         })}
-      </TableBody>
+      </motion.tbody>
     </Table>
 
     <Dialog

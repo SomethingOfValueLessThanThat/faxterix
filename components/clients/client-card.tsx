@@ -2,8 +2,10 @@
 
 import { Pencil, Trash2, Mail } from "lucide-react"
 import { toast } from "sonner"
+import { motion } from "motion/react"
 
 import { Button } from "@/components/ui/button"
+import { fadeInUp, transitions } from "@/components/motion"
 import { useClientApi } from "@/lib/store"
 import type { Client } from "@/lib/types"
 
@@ -22,7 +24,12 @@ export function ClientCard({
   }
 
   return (
-    <div className="group flex flex-col rounded-lg border p-4 transition-colors hover:border-foreground/20">
+    <motion.div
+      variants={fadeInUp}
+      whileHover={{ y: -4 }}
+      transition={transitions.spring}
+      className="group flex flex-col rounded-lg border p-4 transition-colors hover:border-foreground/20 hover:shadow-md"
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="truncate">{client.name}</h3>
@@ -69,6 +76,6 @@ export function ClientCard({
           </p>
         ) : null}
       </div>
-    </div>
+    </motion.div>
   )
 }

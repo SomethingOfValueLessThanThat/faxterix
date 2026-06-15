@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { motion } from "motion/react"
 import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import {
   Wallet,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react"
 
 import { PageContainer } from "@/components/page-container"
+import { FadeIn, Stagger, StaggerItem, transitions } from "@/components/motion"
 import { PageHeader } from "@/components/page-header"
 import {
   Card,
@@ -88,59 +90,77 @@ export function ReportsView() {
       />
 
       {invoices.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
+        <FadeIn className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
           <TrendingUp className="size-8 text-muted-foreground" />
           <h2 className="mt-4">Zatím není co zobrazit</h2>
           <p className="mt-1 max-w-sm text-sm text-balance text-muted-foreground">
             Reporty se zobrazí, jakmile vystavíte první fakturu.
           </p>
-        </div>
+        </FadeIn>
       ) : (
         <div className="flex flex-col gap-6">
           {/* KPI karty */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard
-              label="Vyfakturováno za rok"
-              value={formatCZK(yearRev)}
-              icon={FileCheck}
-              hint="zaplacené, posledních 12 měs."
-            />
-            <StatCard
-              label="Zaplaceno"
-              value={formatCZK(stats.paid)}
-              icon={Wallet}
-              hint="celkově"
-            />
-            <StatCard
-              label="Nezaplaceno"
-              value={formatCZK(stats.unpaid)}
-              icon={ClockAlert}
-              hint={
-                stats.overdueCount > 0
-                  ? `${formatCZK(stats.overdue)} po splatnosti`
-                  : "vše v termínu"
-              }
-            />
-            <StatCard
-              label="Paušální daň za rok"
-              value={formatCZK(profile.flatTaxMonthly * 12)}
-              icon={HandCoins}
-              hint={
-                profile.flatTaxMonthly > 0
-                  ? `${formatCZK(profile.flatTaxMonthly)}/měs.`
-                  : "nastavte v Nastaveních"
-              }
-            />
-            {vatPayer ? (
+          <Stagger className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {[
               <StatCard
-                label="DPH k odvedení"
-                value={formatCZK(stats.vat)}
-                icon={Percent}
-              />
-            ) : null}
-          </div>
+                key="year"
+                label="Vyfakturováno za rok"
+                value={formatCZK(yearRev)}
+                icon={FileCheck}
+                hint="zaplacené, posledních 12 měs."
+              />,
+              <StatCard
+                key="paid"
+                label="Zaplaceno"
+                value={formatCZK(stats.paid)}
+                icon={Wallet}
+                hint="celkově"
+              />,
+              <StatCard
+                key="unpaid"
+                label="Nezaplaceno"
+                value={formatCZK(stats.unpaid)}
+                icon={ClockAlert}
+                hint={
+                  stats.overdueCount > 0
+                    ? `${formatCZK(stats.overdue)} po splatnosti`
+                    : "vše v termínu"
+                }
+              />,
+              <StatCard
+                key="flatTax"
+                label="Paušální daň za rok"
+                value={formatCZK(profile.flatTaxMonthly * 12)}
+                icon={HandCoins}
+                hint={
+                  profile.flatTaxMonthly > 0
+                    ? `${formatCZK(profile.flatTaxMonthly)}/měs.`
+                    : "nastavte v Nastaveních"
+                }
+              />,
+              ...(vatPayer
+                ? [
+                    <StatCard
+                      key="vat"
+                      label="DPH k odvedení"
+                      value={formatCZK(stats.vat)}
+                      icon={Percent}
+                    />,
+                  ]
+                : []),
+            ].map((card) => (
+              <StaggerItem
+                key={card.key}
+                whileHover={{ y: -4 }}
+                transition={transitions.spring}
+              >
+                {card}
+              </StaggerItem>
+            ))}
+          </Stagger>
 
           {/* Tržby po měsících */}
+          <FadeIn delay={0.1}>
           <Card>
             <CardHeader>
               <CardTitle>Tržby po měsících</CardTitle>
@@ -200,8 +220,10 @@ export function ReportsView() {
               </ChartContainer>
             </CardContent>
           </Card>
+          </FadeIn>
 
           {/* Pokrok k pasmu */}
+          <FadeIn delay={0.16}>
           <Card>
             <CardHeader>
               <CardTitle>Pokrok k {bandProg.band}. pásmu</CardTitle>
@@ -211,10 +233,12 @@ export function ReportsView() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full transition-all"
+                <motion.div
+                  className="h-full rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(bandProg.percentage, 100)}%` }}
+                  transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: 0.3 }}
                   style={{
-                    width: `${Math.min(bandProg.percentage, 100)}%`,
                     background:
                       "linear-gradient(90deg, #4ade80 0%, #facc15 100%)",
                   }}
@@ -226,6 +250,7 @@ export function ReportsView() {
               </div>
             </CardContent>
           </Card>
+          </FadeIn>
         </div>
       )}
     </PageContainer>

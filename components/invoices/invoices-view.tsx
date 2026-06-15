@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { Plus, FileDown, Upload } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { FadeIn } from "@/components/motion"
 import { PageHeader } from "@/components/page-header"
 import { PageContainer } from "@/components/page-container"
 import { Kbd } from "@/components/kbd"
@@ -93,7 +94,7 @@ export function InvoicesView() {
       />
 
       {invoices.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
+        <FadeIn className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
           <FileDown className="size-8 text-muted-foreground" />
           <h2 className="mt-4">Zatím žádné faktury</h2>
           <p className="mt-1 max-w-sm text-sm text-balance text-muted-foreground">
@@ -105,7 +106,7 @@ export function InvoicesView() {
             <Plus />
             Nová faktura
           </Button>
-        </div>
+        </FadeIn>
       ) : (
         <InvoiceTable invoices={invoices} />
       )}
