@@ -54,7 +54,9 @@ export default defineSchema({
     paymentMethod: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_issueDate", ["issueDate"]),
+  })
+    .index("by_issueDate", ["issueDate"])
+    .index("by_variableSymbol", ["variableSymbol"]),
 
   // Profil firmy je singleton – v tabulce drží jediný dokument.
   profile: defineTable({
