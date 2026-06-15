@@ -1,20 +1,17 @@
 "use client"
 
 import * as React from "react"
-import {
-  Line,
-  LineChart,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-} from "recharts"
+import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import {
   Wallet,
   Clock,
-  AlertTriangle,
   Receipt,
   Percent,
   TrendingUp,
+  BadgePercent,
+  FileCheck,
+  ClockAlert,
+  HandCoins,
 } from "lucide-react"
 
 import { PageContainer } from "@/components/page-container"
@@ -54,7 +51,6 @@ const revenueConfig = {
   unpaid: { label: "Nezaplaceno", color: "var(--chart-3)" },
 } satisfies ChartConfig
 
-
 export function ReportsView() {
   const invoices = useInvoices()
   const clients = useClients()
@@ -74,7 +70,13 @@ export function ReportsView() {
     [invoices, vatPayer]
   )
   const bandProg = React.useMemo(
-    () => bandProgress(invoices, vatPayer, profile.selectedBand, profile.bandLimits),
+    () =>
+      bandProgress(
+        invoices,
+        vatPayer,
+        profile.selectedBand,
+        profile.bandLimits
+      ),
     [invoices, vatPayer, profile.selectedBand, profile.bandLimits]
   )
 
@@ -100,17 +102,19 @@ export function ReportsView() {
             <StatCard
               label="Vyfakturováno za rok"
               value={formatCZK(yearRev)}
-              icon={Receipt}
+              icon={FileCheck}
+              hint="zaplacené, posledních 12 měs."
             />
             <StatCard
               label="Zaplaceno"
               value={formatCZK(stats.paid)}
               icon={Wallet}
+              hint="celkově"
             />
             <StatCard
               label="Nezaplaceno"
               value={formatCZK(stats.unpaid)}
-              icon={Clock}
+              icon={ClockAlert}
               hint={
                 stats.overdueCount > 0
                   ? `${formatCZK(stats.overdue)} po splatnosti`
@@ -118,10 +122,14 @@ export function ReportsView() {
               }
             />
             <StatCard
-              label="Po splatnosti"
-              value={stats.overdueCount}
-              icon={AlertTriangle}
-              hint={pluralizeInvoices(stats.overdueCount)}
+              label="Paušální daň za rok"
+              value={formatCZK(profile.flatTaxMonthly * 12)}
+              icon={HandCoins}
+              hint={
+                profile.flatTaxMonthly > 0
+                  ? `${formatCZK(profile.flatTaxMonthly)}/měs.`
+                  : "nastavte v Nastaveních"
+              }
             />
             {vatPayer ? (
               <StatCard
@@ -197,15 +205,18 @@ export function ReportsView() {
           <Card>
             <CardHeader>
               <CardTitle>Pokrok k {bandProg.band}. pásmu</CardTitle>
-              <CardDescription>{formatCZK(bandProg.current)} z {formatCZK(bandProg.limit)}</CardDescription>
+              <CardDescription>
+                {formatCZK(bandProg.current)} z {formatCZK(bandProg.limit)}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
+              <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full rounded-full transition-all"
                   style={{
                     width: `${Math.min(bandProg.percentage, 100)}%`,
-                    background: "linear-gradient(90deg, #4ade80 0%, #facc15 100%)",
+                    background:
+                      "linear-gradient(90deg, #4ade80 0%, #facc15 100%)",
                   }}
                 />
               </div>
@@ -215,15 +226,8 @@ export function ReportsView() {
               </div>
             </CardContent>
           </Card>
-
         </div>
       )}
     </PageContainer>
   )
-}
-
-function pluralizeInvoices(n: number): string {
-  if (n === 1) return "faktura"
-  if (n >= 2 && n <= 4) return "faktury"
-  return "faktur"
 }

@@ -106,6 +106,7 @@ export const companyProfileSchema = z.object({
   numberFormat: z.string().min(1, "Formát čísla faktury nesmí být prázdný."),
   selectedBand: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   bandLimits: z.array(z.number()).min(3).max(3),
+  flatTaxMonthly: z.number().min(0),
 })
 
 /** Klient při ručním vyplnění / úpravě. */

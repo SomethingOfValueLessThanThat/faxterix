@@ -25,6 +25,7 @@ const profileFields = {
   numberFormat: v.string(),
   selectedBand: v.union(v.literal(1), v.literal(2), v.literal(3)),
   bandLimits: v.array(v.number()),
+  flatTaxMonthly: v.optional(v.number()),
 }
 
 export const save = mutation({

@@ -25,6 +25,7 @@ const defaultProfile: CompanyProfile = {
   numberFormat: "{YYYY}{NNNN}",
   selectedBand: 1,
   bandLimits: [1_000_000, 1_500_000, 2_000_000],
+  flatTaxMonthly: 0,
 }
 
 // --- Klienti ---------------------------------------------------------------
@@ -140,6 +141,7 @@ export function useProfile(): CompanyProfile {
       ...raw,
       bandLimits: raw.bandLimits ?? defaultProfile.bandLimits,
       selectedBand: raw.selectedBand ?? defaultProfile.selectedBand,
+      flatTaxMonthly: raw.flatTaxMonthly ?? defaultProfile.flatTaxMonthly,
     }
   }, [raw])
 }
@@ -164,6 +166,7 @@ export function useProfileApi() {
           numberFormat: profile.numberFormat,
           selectedBand: profile.selectedBand,
           bandLimits: profile.bandLimits,
+          flatTaxMonthly: profile.flatTaxMonthly,
         }),
     }),
     [save]

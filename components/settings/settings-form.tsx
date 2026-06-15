@@ -234,6 +234,14 @@ export function SettingsForm() {
               </SelectContent>
             </Select>
           </SettingsField>
+          <SettingsField label="Měsíční platba paušální daně (Kč)">
+            <Input
+              type="number"
+              min={0}
+              value={draft.flatTaxMonthly}
+              onChange={(e) => setField("flatTaxMonthly", Number(e.target.value))}
+            />
+          </SettingsField>
         </section>
 
         {dirty && (

@@ -81,6 +81,8 @@ export interface CompanyProfile {
   selectedBand: 1 | 2 | 3
   /** Limity pro jednotlivá pasma [1. pasmo, 2. pasmo, 3. pasmo]. */
   bandLimits: number[]
+  /** Měsíční platba paušální daně v Kč. */
+  flatTaxMonthly: number
 }
 
 export const emptyAddress = (): Address => ({
