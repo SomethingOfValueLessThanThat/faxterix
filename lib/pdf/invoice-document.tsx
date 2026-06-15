@@ -14,6 +14,7 @@ import {
 import type { Invoice, CompanyProfile } from "../types"
 import { computeTotals, lineTotal } from "../invoice"
 import { formatCZK, formatDate, formatNumber } from "../format"
+import { czechAccountToIban } from "../spayd"
 
 let registered = false
 export function registerPdfFonts() {
@@ -451,7 +452,12 @@ export function InvoiceDocument({
             {profile.bankAccount ? (
               <PayLine k="Účet" v={profile.bankAccount} />
             ) : null}
-            {profile.iban ? <PayLine k="IBAN" v={profile.iban} /> : null}
+            {profile.bankAccount
+              ? (() => {
+                  const iban = czechAccountToIban(profile.bankAccount)
+                  return iban ? <PayLine k="IBAN" v={iban} /> : null
+                })()
+              : null}
             <PayLine k="Variabilní symbol" v={invoice.variableSymbol || "—"} />
             <PayLine k="Částka" v={formatCZK(totals.total)} />
             {invoice.paymentMethod ? (

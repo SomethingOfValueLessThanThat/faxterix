@@ -67,7 +67,7 @@ export default defineSchema({
     address: addressValidator,
     email: v.string(),
     phone: v.string(),
-    iban: v.string(),
+    iban: v.optional(v.string()),
     bankAccount: v.string(),
     dueDays: v.number(),
     numberFormat: v.string(),

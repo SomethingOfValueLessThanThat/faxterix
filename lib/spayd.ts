@@ -15,6 +15,30 @@ function sanitizeIban(iban: string): string {
   return iban.replace(/\s+/g, "").toUpperCase()
 }
 
+/**
+ * Převede české číslo účtu (formát `[předčíslí-]číslo/kód`) na IBAN.
+ * Vrátí null pokud formát není rozpoznán.
+ */
+export function czechAccountToIban(bankAccount: string): string | null {
+  const match = bankAccount
+    .trim()
+    .match(/^(?:(\d{1,6})-)?(\d{2,10})\/(\d{4})$/)
+  if (!match) return null
+
+  const prefix = (match[1] ?? "0").padStart(6, "0")
+  const number = match[2].padStart(10, "0")
+  const bankCode = match[3]
+  const bban = bankCode + prefix + number // 20 číslic
+
+  // Převod "CZ00" na číslice: C=12, Z=35 → "123500"
+  let remainder = 0
+  for (const ch of bban + "123500") {
+    remainder = (remainder * 10 + parseInt(ch)) % 97
+  }
+  const checkDigits = String(98 - remainder).padStart(2, "0")
+  return `CZ${checkDigits}${bban}`
+}
+
 /** SPAYD povoluje jen ASCII; diakritiku odstraníme a hvězdičky vypustíme. */
 function sanitizeText(text: string): string {
   return text

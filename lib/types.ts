@@ -71,7 +71,6 @@ export interface CompanyProfile {
   address: Address
   email: string
   phone: string
-  iban: string
   bankAccount: string
   /** Výchozí splatnost ve dnech. */
   dueDays: number

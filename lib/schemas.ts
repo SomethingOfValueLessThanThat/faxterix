@@ -17,20 +17,6 @@ const PHONE_RE = /^(\+\d{1,3} ?)?\d{3} ?\d{3} ?\d{3}$/
 const strip = (v: string) => v.replace(/\s+/g, "")
 const isBlank = (v: string) => v.trim() === ""
 
-/** IBAN s kontrolou délky a mod-97 (důležité pro QR Platbu na PDF). */
-function isValidIban(raw: string): boolean {
-  const iban = strip(raw).toUpperCase()
-  if (iban.length < 15 || iban.length > 34) return false
-  if (!/^[A-Z]{2}\d{2}[A-Z0-9]+$/.test(iban)) return false
-  const rearranged = iban.slice(4) + iban.slice(0, 4)
-  const numeric = rearranged.replace(/[A-Z]/g, (c) =>
-    String(c.charCodeAt(0) - 55)
-  )
-  let remainder = 0
-  for (const ch of numeric) remainder = (remainder * 10 + Number(ch)) % 97
-  return remainder === 1
-}
-
 /** Povinné IČO (8 číslic) – používá se ve flow „načti z ARES". */
 export const icoSchema = z
   .string()
@@ -60,10 +46,6 @@ const optionalPhone = z
     (v) => isBlank(v) || PHONE_RE.test(v.trim()),
     "Zadejte platné telefonní číslo (např. +420 123 456 789)."
   )
-
-const optionalIban = z
-  .string()
-  .refine((v) => isBlank(v) || isValidIban(v), "Neplatný IBAN.")
 
 const optionalBankAccount = z
   .string()
@@ -100,7 +82,6 @@ export const companyProfileSchema = z.object({
   address: addressSchema,
   email: optionalEmail,
   phone: optionalPhone,
-  iban: optionalIban,
   bankAccount: optionalBankAccount,
   dueDays: dueDaysSchema,
   numberFormat: z.string().min(1, "Formát čísla faktury nesmí být prázdný."),

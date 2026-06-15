@@ -180,7 +180,7 @@ export function SettingsForm() {
           <div>
             <h2 className="text-sm">Platební údaje</h2>
             <p className="text-xs text-muted-foreground">
-              IBAN je potřeba pro vygenerování QR Platby na PDF.
+              Číslo účtu je potřeba pro vygenerování QR Platby na PDF.
             </p>
           </div>
           <SettingsField label="Číslo účtu" error={errors.bankAccount}>
@@ -189,14 +189,6 @@ export function SettingsForm() {
               onChange={(e) => setField("bankAccount", e.target.value)}
               placeholder="123456789/0100"
               aria-invalid={!!errors.bankAccount || undefined}
-            />
-          </SettingsField>
-          <SettingsField label="IBAN" error={errors.iban}>
-            <Input
-              value={draft.iban}
-              onChange={(e) => setField("iban", e.target.value)}
-              placeholder="CZ65 0800 0000 1920 0014 5399"
-              aria-invalid={!!errors.iban || undefined}
             />
           </SettingsField>
         </section>

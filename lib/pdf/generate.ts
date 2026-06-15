@@ -2,17 +2,18 @@
 
 import type { Invoice, CompanyProfile } from "../types"
 import { computeTotals } from "../invoice"
-import { buildSpayd } from "../spayd"
+import { buildSpayd, czechAccountToIban } from "../spayd"
 
-/** Vytvoří data URL QR Platby, nebo null pokud chybí IBAN. */
+/** Vytvoří data URL QR Platby, nebo null pokud chybí číslo účtu. */
 async function buildQrDataUrl(
   invoice: Invoice,
   profile: CompanyProfile
 ): Promise<string | null> {
-  if (!profile.iban) return null
+  const iban = czechAccountToIban(profile.bankAccount)
+  if (!iban) return null
   const total = computeTotals(invoice.items, profile.vatPayer).total
   const payload = buildSpayd({
-    iban: profile.iban,
+    iban,
     amount: total,
     variableSymbol: invoice.variableSymbol,
     recipientName: profile.name,

@@ -19,7 +19,6 @@ const profileFields = {
   address: addressValidator,
   email: v.string(),
   phone: v.string(),
-  iban: v.string(),
   bankAccount: v.string(),
   dueDays: v.number(),
   numberFormat: v.string(),
@@ -33,7 +32,7 @@ export const save = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db.query("profile").first()
     if (existing) {
-      await ctx.db.patch(existing._id, args)
+      await ctx.db.replace(existing._id, args)
       return existing._id
     }
     return await ctx.db.insert("profile", args)

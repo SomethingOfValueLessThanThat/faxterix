@@ -40,7 +40,7 @@ import {
 import { CalendarIcon } from "lucide-react"
 import { cs } from "date-fns/locale"
 import { downloadInvoicePdf } from "@/lib/pdf/generate"
-import { buildSpayd } from "@/lib/spayd"
+import { buildSpayd, czechAccountToIban } from "@/lib/spayd"
 import type {
   Invoice,
   InvoiceItem,
@@ -301,7 +301,7 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                   {formatCZK(totals.total)}
                 </span>
               </div>
-              {profile.iban ? (
+              {profile.bankAccount ? (
                 <QrPreview
                   invoice={draft}
                   profile={profile}
@@ -309,7 +309,7 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                 />
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Doplňte IBAN v nastavení pro QR Platbu na PDF.
+                  Doplňte číslo účtu v nastavení pro QR Platbu na PDF.
                 </p>
               )}
             </div>
@@ -624,10 +624,11 @@ function QrPreview({
   total: number
 }) {
   // Klíč popisuje vstupy QR kódu. Pokud nejsou platné, je null a QR se nezobrazí.
+  const iban = czechAccountToIban(profile.bankAccount)
   const qrKey =
-    profile.iban && total > 0
+    iban && total > 0
       ? JSON.stringify({
-          iban: profile.iban,
+          iban,
           name: profile.name,
           total,
           variableSymbol: invoice.variableSymbol,
@@ -639,10 +640,10 @@ function QrPreview({
   const [qr, setQr] = React.useState<{ key: string; url: string } | null>(null)
 
   React.useEffect(() => {
-    if (!qrKey) return
+    if (!qrKey || !iban) return
     let active = true
     const payload = buildSpayd({
-      iban: profile.iban,
+      iban,
       amount: total,
       variableSymbol: invoice.variableSymbol,
       recipientName: profile.name,
@@ -664,7 +665,7 @@ function QrPreview({
     }
   }, [
     qrKey,
-    profile.iban,
+    iban,
     profile.name,
     total,
     invoice.variableSymbol,
