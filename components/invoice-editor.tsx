@@ -29,7 +29,7 @@ import {
 import { computeTotals, emptyItem, nextInvoiceNumber } from "@/lib/invoice"
 import { invoiceDraftSchema, fieldErrors, firstError } from "@/lib/schemas"
 import { formatCZK, formatDate } from "@/lib/format"
-import { addDaysISO, todayISO } from "@/lib/format"
+import { addDaysISO, todayISO, toLocalISODate } from "@/lib/format"
 import { routes } from "@/lib/routes"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -384,14 +384,10 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                   <Label className="mb-1 text-xs text-muted-foreground sm:hidden">
                     Počet
                   </Label>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
+                  <NumberInput
                     value={item.quantity}
-                    onChange={(e) =>
-                      updateItem(item.id, {
-                        quantity: Number(e.target.value),
-                      })
+                    onValueChange={(quantity) =>
+                      updateItem(item.id, { quantity })
                     }
                     aria-invalid={
                       !!errors[`items.${index}.quantity`] || undefined
@@ -414,14 +410,10 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                   <Label className="mb-1 text-xs text-muted-foreground sm:hidden">
                     Cena/MJ
                   </Label>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
+                  <NumberInput
                     value={item.unitPrice}
-                    onChange={(e) =>
-                      updateItem(item.id, {
-                        unitPrice: Number(e.target.value),
-                      })
+                    onValueChange={(unitPrice) =>
+                      updateItem(item.id, { unitPrice })
                     }
                     aria-invalid={
                       !!errors[`items.${index}.unitPrice`] || undefined
@@ -556,14 +548,47 @@ function DatePicker({
           locale={cs}
           onSelect={(date) => {
             if (date) {
-              const iso = date.toISOString().slice(0, 10)
-              onChange(iso)
+              onChange(toLocalISODate(date))
               setOpen(false)
             }
           }}
         />
       </PopoverContent>
     </Popover>
+  )
+}
+
+function NumberInput({
+  value,
+  onValueChange,
+  ...props
+}: {
+  value: number
+  onValueChange: (value: number) => void
+} & Omit<React.ComponentProps<typeof Input>, "value" | "onChange" | "type">) {
+  // Drží vlastní textový stav, aby šlo pole vymazat (jinak `Number("")` → 0
+  // a nešla by přepsat počáteční nula). Hodnotu zvenčí promítneme do textu jen
+  // když se liší číselně – sync během renderu, ne v efektu.
+  const [text, setText] = React.useState(() => String(value))
+  const [prevValue, setPrevValue] = React.useState(value)
+  if (value !== prevValue) {
+    setPrevValue(value)
+    if ((text === "" ? NaN : Number(text)) !== value) setText(String(value))
+  }
+
+  return (
+    <Input
+      type="number"
+      inputMode="decimal"
+      value={text}
+      onChange={(e) => {
+        const raw = e.target.value
+        setText(raw)
+        const n = raw === "" ? 0 : Number(raw)
+        if (!Number.isNaN(n)) onValueChange(n)
+      }}
+      {...props}
+    />
   )
 }
 

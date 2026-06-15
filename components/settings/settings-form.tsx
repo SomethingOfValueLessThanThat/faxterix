@@ -69,6 +69,7 @@ export function SettingsForm() {
     }
     setErrors({})
     await profileApi.save(draft)
+    setDirty(false)
     toast.success("Nastavení uloženo.")
   }
 
@@ -234,6 +235,12 @@ export function SettingsForm() {
             </Select>
           </SettingsField>
         </section>
+
+        {dirty && (
+          <span className="inline-block rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs text-amber-700">
+            Neuložené změny
+          </span>
+        )}
       </div>
     </>
   )

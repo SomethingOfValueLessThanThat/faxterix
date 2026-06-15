@@ -7,6 +7,7 @@ shadcn/ui (base-ui).
 
 ```bash
 npm run dev      # vývojový server na http://localhost:3000
+npm run convex   # Convex backend (vývoj)
 npm run build    # produkční build
 npm run typecheck
 npm run lint
@@ -37,15 +38,19 @@ npm run lint
 
 ## Architektura
 
-- Data jsou zatím v `localStorage` přes reaktivní store
-  (`lib/store.tsx`, `useSyncExternalStore`). API je tvarováno jako Convex hooky
-  (`useClients`, `useInvoices`, `useProfile`), takže výměna za Convex backend je
-  přímočará.
-- PDF a QR se generují na klientu (`lib/pdf/*`, `@react-pdf/renderer`, `qrcode`),
-  font Roboto (latin-ext) je v `public/fonts`.
+- Backend běží na [Convexu](https://convex.dev) (`convex/clients.ts`,
+  `invoices.ts`, `profile.ts` jako singleton, `data.ts` pro hromadný import).
+  Schéma `convex/schema.ts` zrcadlí doménové typy v `lib/types.ts`.
+- Datová vrstva `lib/store.tsx` je jediný zdroj čtení i zápisů – obaluje Convex
+  `useQuery`/`useMutation` do malých hooků (`useClients`, `useInvoices`,
+  `useProfile`, `useClientApi`, …). Komponenty sahají jen na tyto hooky, nikdy
+  na Convex přímo.
+- PDF a QR se generují na klientu (`lib/pdf/*`, `@react-pdf/renderer`;
+  SPAYD QR přes `lib/spayd.ts` + `qrcode`), font Roboto (latin-ext) je
+  v `public/fonts`.
 - ARES běží přes route handler `app/api/ares/route.ts`.
 
-## Další kroky (mimo 1. iteraci)
+## Další kroky
 
-Import starých faktur, šablony pravidelných faktur a napojení Convexu
-(`invoiceApi.importMany` už počítá s hromadným importem).
+Šablony pravidelných faktur a další rozšíření importu
+(`invoiceApi.importMany` zvládá hromadný import, např. CSV z Fakturoidu).

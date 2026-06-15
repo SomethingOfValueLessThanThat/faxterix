@@ -69,7 +69,7 @@ export default defineSchema({
     bankAccount: v.string(),
     dueDays: v.number(),
     numberFormat: v.string(),
-    selectedBand: v.union(v.literal(1), v.literal(2), v.literal(3)),
-    bandLimits: v.array(v.number()),
+    selectedBand: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3))),
+    bandLimits: v.optional(v.array(v.number())),
   }),
 })

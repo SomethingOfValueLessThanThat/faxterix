@@ -22,14 +22,22 @@ export function formatDate(iso: string): string {
   return new Intl.DateTimeFormat("cs-CZ", { dateStyle: "medium" }).format(d)
 }
 
+/** Datum jako `YYYY-MM-DD` v lokálním čase (ne UTC, aby se den neposouval). */
+export function toLocalISODate(d: Date): string {
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
+  return toLocalISODate(new Date())
 }
 
 export function addDaysISO(iso: string, days: number): string {
   const d = new Date(iso)
   d.setDate(d.getDate() + days)
-  return d.toISOString().slice(0, 10)
+  return toLocalISODate(d)
 }
 
 /** Formátování IČO jako 8 číslic. */
