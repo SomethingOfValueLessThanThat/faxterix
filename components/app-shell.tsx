@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { FileText, Users, Zap, Settings } from "lucide-react"
+import { FileText, Users, Zap, Settings, LogOut } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { useHotkeys } from "@/hooks/use-hotkeys"
@@ -19,6 +19,22 @@ const nav = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+
+  // Login běží bez navigace ani klávesových zkratek.
+  if (pathname === "/login") {
+    return <>{children}</>
+  }
+
+  return <AppChrome pathname={pathname}>{children}</AppChrome>
+}
+
+function AppChrome({
+  children,
+  pathname,
+}: {
+  children: React.ReactNode
+  pathname: string
+}) {
   const router = useRouter()
 
   // Quick navigation: Cmd+1 / Cmd+2 / Cmd+3
@@ -54,6 +70,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           )
         })}
+
+        <button
+          type="button"
+          onClick={async () => {
+            await fetch("/api/login", { method: "DELETE" })
+            router.push("/login")
+            router.refresh()
+          }}
+          className="mt-auto flex cursor-pointer items-center gap-4 rounded-2xl px-4 py-3 text-base text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <LogOut strokeWidth={2.4} className="size-6" />
+          <span>Odhlásit</span>
+        </button>
       </aside>
 
       {/* Main content */}
