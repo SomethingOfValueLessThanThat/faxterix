@@ -32,6 +32,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart"
 import { StatCard } from "@/components/reports/stat-card"
+import { Sensitive } from "@/components/ui/sensitive"
+import { usePrivacy } from "@/lib/privacy"
 import { useInvoices, useClients, useProfile } from "@/lib/store"
 import { formatCZK } from "@/lib/format"
 import {
@@ -58,6 +60,7 @@ export function ReportsView() {
   const clients = useClients()
   const profile = useProfile()
   const vatPayer = profile.vatPayer
+  const { blurred } = usePrivacy()
 
   const stats = React.useMemo(
     () => summaryStats(invoices, clients, vatPayer),
@@ -105,37 +108,41 @@ export function ReportsView() {
               <StatCard
                 key="year"
                 label="Vyfakturováno za rok"
-                value={formatCZK(yearRev)}
+                value={<Sensitive>{formatCZK(yearRev)}</Sensitive>}
                 icon={FileCheck}
                 hint="zaplacené, posledních 12 měs."
               />,
               <StatCard
                 key="paid"
                 label="Zaplaceno"
-                value={formatCZK(stats.paid)}
+                value={<Sensitive>{formatCZK(stats.paid)}</Sensitive>}
                 icon={Wallet}
                 hint="celkově"
               />,
               <StatCard
                 key="unpaid"
                 label="Nezaplaceno"
-                value={formatCZK(stats.unpaid)}
+                value={<Sensitive>{formatCZK(stats.unpaid)}</Sensitive>}
                 icon={ClockAlert}
                 hint={
-                  stats.overdueCount > 0
-                    ? `${formatCZK(stats.overdue)} po splatnosti`
-                    : "vše v termínu"
+                  stats.overdueCount > 0 ? (
+                    <Sensitive>{`${formatCZK(stats.overdue)} po splatnosti`}</Sensitive>
+                  ) : (
+                    "vše v termínu"
+                  )
                 }
               />,
               <StatCard
                 key="flatTax"
                 label="Paušální daň za rok"
-                value={formatCZK(profile.flatTaxMonthly * 12)}
+                value={<Sensitive>{formatCZK(profile.flatTaxMonthly * 12)}</Sensitive>}
                 icon={HandCoins}
                 hint={
-                  profile.flatTaxMonthly > 0
-                    ? `${formatCZK(profile.flatTaxMonthly)}/měs.`
-                    : "nastavte v Nastaveních"
+                  profile.flatTaxMonthly > 0 ? (
+                    <Sensitive>{`${formatCZK(profile.flatTaxMonthly)}/měs.`}</Sensitive>
+                  ) : (
+                    "nastavte v Nastaveních"
+                  )
                 }
               />,
               ...(vatPayer
@@ -143,7 +150,7 @@ export function ReportsView() {
                     <StatCard
                       key="vat"
                       label="DPH k odvedení"
-                      value={formatCZK(stats.vat)}
+                      value={<Sensitive>{formatCZK(stats.vat)}</Sensitive>}
                       icon={Percent}
                     />,
                   ]
@@ -169,6 +176,8 @@ export function ReportsView() {
             <CardContent>
               <ChartContainer
                 config={revenueConfig}
+                // Rozostříme jen čísla na ose Y; viz pravidlo v globals.css.
+                data-blur-amounts={blurred ? "" : undefined}
                 className="aspect-auto h-[280px] w-full"
               >
                 <LineChart data={revenue} margin={{ left: 12, right: 12 }}>
@@ -194,9 +203,9 @@ export function ReportsView() {
                               {revenueConfig[name as keyof typeof revenueConfig]
                                 ?.label ?? name}
                             </span>
-                            <span className="font-mono font-medium tabular-nums">
+                            <Sensitive className="font-mono font-medium tabular-nums">
                               {formatCZK(Number(value))}
-                            </span>
+                            </Sensitive>
                           </div>
                         )}
                       />
@@ -228,7 +237,9 @@ export function ReportsView() {
             <CardHeader>
               <CardTitle>Pokrok k {bandProg.band}. pásmu</CardTitle>
               <CardDescription>
-                {formatCZK(bandProg.current)} z {formatCZK(bandProg.limit)}
+                <Sensitive>
+                  {formatCZK(bandProg.current)} z {formatCZK(bandProg.limit)}
+                </Sensitive>
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -246,7 +257,7 @@ export function ReportsView() {
               </div>
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>{bandProg.percentage}%</span>
-                <span>zbývá {formatCZK(bandProg.remaining)}</span>
+                <Sensitive>zbývá {formatCZK(bandProg.remaining)}</Sensitive>
               </div>
             </CardContent>
           </Card>

@@ -17,6 +17,7 @@ import { motion } from "motion/react"
 import { staggerContainer, fadeInUp } from "@/components/motion"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Sensitive } from "@/components/ui/sensitive"
 import {
   Table,
   TableCell,
@@ -243,7 +244,9 @@ export function InvoiceTable({ invoices }: { invoices: Invoice[] }) {
               <TableCell>
                 <Badge variant={meta.variant}>{meta.label}</Badge>
               </TableCell>
-              <TableCell className="text-right">{formatCZK(total)}</TableCell>
+              <TableCell className="text-right">
+                <Sensitive>{formatCZK(total)}</Sensitive>
+              </TableCell>
               <TableCell onClick={(e) => e.stopPropagation()}>
                 <DropdownMenu>
                   <DropdownMenuTrigger

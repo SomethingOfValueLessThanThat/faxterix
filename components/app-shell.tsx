@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { FileText, Users, Zap, Settings, LogOut } from "lucide-react"
+import { FileText, Users, Zap, Settings, LogOut, Eye, EyeOff } from "lucide-react"
 import { motion, MotionConfig, LayoutGroup } from "motion/react"
 
 import { cn } from "@/lib/utils"
@@ -11,6 +11,7 @@ import { useHotkeys } from "@/hooks/use-hotkeys"
 import { CommandMenu } from "@/components/command-menu"
 import { transitions } from "@/components/motion"
 import { routes } from "@/lib/routes"
+import { usePrivacy } from "@/lib/privacy"
 
 const nav = [
   { href: routes.invoices, label: "Faktury", icon: FileText, key: "1" },
@@ -44,6 +45,7 @@ function AppChrome({
   pathname: string
 }) {
   const router = useRouter()
+  const { blurred, toggle } = usePrivacy()
 
   // Quick navigation: Cmd+1 / Cmd+2 / Cmd+3
   useHotkeys(
@@ -98,6 +100,29 @@ function AppChrome({
 
           <motion.button
             type="button"
+            onClick={toggle}
+            aria-pressed={blurred}
+            initial={{ opacity: 0, x: -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ ...transitions.easeOut, delay: 0.06 * nav.length }}
+            whileTap={{ scale: 0.97 }}
+            className={cn(
+              "mt-auto flex cursor-pointer items-center gap-4 rounded-2xl px-4 py-3 text-base transition-colors",
+              blurred
+                ? "text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {blurred ? (
+              <EyeOff strokeWidth={2.4} className="size-6" />
+            ) : (
+              <Eye strokeWidth={2.4} className="size-6" />
+            )}
+            <span>{blurred ? "Zobrazit ceny" : "Skrýt ceny"}</span>
+          </motion.button>
+
+          <motion.button
+            type="button"
             onClick={async () => {
               await fetch("/api/login", { method: "DELETE" })
               router.push("/login")
@@ -105,9 +130,9 @@ function AppChrome({
             }}
             initial={{ opacity: 0, x: -16 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ ...transitions.easeOut, delay: 0.06 * nav.length }}
+            transition={{ ...transitions.easeOut, delay: 0.06 * (nav.length + 1) }}
             whileTap={{ scale: 0.97 }}
-            className="mt-auto flex cursor-pointer items-center gap-4 rounded-2xl px-4 py-3 text-base text-muted-foreground transition-colors hover:text-foreground"
+            className="flex cursor-pointer items-center gap-4 rounded-2xl px-4 py-3 text-base text-muted-foreground transition-colors hover:text-foreground"
           >
             <LogOut strokeWidth={2.4} className="size-6" />
             <span>Odhlásit</span>

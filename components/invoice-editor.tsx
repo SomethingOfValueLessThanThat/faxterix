@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Sensitive } from "@/components/ui/sensitive"
 import { useHotkeys } from "@/hooks/use-hotkeys"
 import {
   useClients,
@@ -297,9 +298,9 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
               )}
               <div className="flex items-center justify-between">
                 <span>K úhradě</span>
-                <span className="text-lg text-primary tabular-nums">
+                <Sensitive className="text-lg text-primary tabular-nums">
                   {formatCZK(totals.total)}
-                </span>
+                </Sensitive>
               </div>
               {profile.bankAccount ? (
                 <QrPreview
@@ -410,15 +411,17 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                   <Label className="mb-1 text-xs text-muted-foreground sm:hidden">
                     Cena/MJ
                   </Label>
-                  <NumberInput
-                    value={item.unitPrice}
-                    onValueChange={(unitPrice) =>
-                      updateItem(item.id, { unitPrice })
-                    }
-                    aria-invalid={
-                      !!errors[`items.${index}.unitPrice`] || undefined
-                    }
-                  />
+                  <Sensitive className="block">
+                    <NumberInput
+                      value={item.unitPrice}
+                      onValueChange={(unitPrice) =>
+                        updateItem(item.id, { unitPrice })
+                      }
+                      aria-invalid={
+                        !!errors[`items.${index}.unitPrice`] || undefined
+                      }
+                    />
+                  </Sensitive>
                 </div>
                 {profile.vatPayer && (
                   <div className="col-span-6 sm:col-span-2">
@@ -451,9 +454,9 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                       : "col-span-12 flex items-center justify-end gap-2 sm:col-span-2"
                   }
                 >
-                  <span className="text-sm tabular-nums">
+                  <Sensitive className="text-sm tabular-nums">
                     {formatCZK(item.quantity * item.unitPrice)}
-                  </span>
+                  </Sensitive>
                   <Button
                     variant="ghost"
                     size="icon-sm"
@@ -609,7 +612,7 @@ function Row({
       }
     >
       <span>{label}</span>
-      <span className="tabular-nums">{value}</span>
+      <Sensitive className="tabular-nums">{value}</Sensitive>
     </div>
   )
 }

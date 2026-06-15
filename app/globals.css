@@ -109,6 +109,14 @@
   stroke-width: 2.8;
 }
 
+/* Režim soukromí: rozostří jen popisky (čísla) osy Y v grafu tržeb. Recharts
+   je renderuje do samostatné vrstvy `.recharts-yAxis-tick-labels`, ne pod
+   `.recharts-yAxis`. Křivka je v jiné vrstvě, zůstává ostrá. */
+[data-blur-amounts] .recharts-yAxis-tick-labels text {
+  filter: blur(5px);
+  user-select: none;
+}
+
 .toaster {
   font-family: var(--font-sans);
 }
