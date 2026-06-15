@@ -29,6 +29,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { useProfile, useInvoiceApi } from "@/lib/store"
 import { computeTotals } from "@/lib/invoice"
 import { formatCZK, formatDate } from "@/lib/format"
@@ -110,6 +118,10 @@ export function InvoiceTable({ invoices }: { invoices: Invoice[] }) {
     key: "number",
     direction: "desc",
   })
+  const [pendingDelete, setPendingDelete] = React.useState<{
+    id: string
+    number: string
+  } | null>(null)
 
   const totals = React.useMemo(() => {
     const map = new Map<string, number>()
@@ -167,12 +179,15 @@ export function InvoiceTable({ invoices }: { invoices: Invoice[] }) {
     }
   }
 
-  async function remove(id: string, number: string) {
-    await invoiceApi.remove(id)
-    toast.success(`Faktura ${number} smazána.`)
+  async function confirmDelete() {
+    if (!pendingDelete) return
+    await invoiceApi.remove(pendingDelete.id)
+    toast.success(`Faktura ${pendingDelete.number} smazána.`)
+    setPendingDelete(null)
   }
 
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -244,7 +259,12 @@ export function InvoiceTable({ invoices }: { invoices: Invoice[] }) {
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       variant="destructive"
-                      onClick={() => remove(invoice._id, invoice.number)}
+                      onClick={() =>
+                        setPendingDelete({
+                          id: invoice._id,
+                          number: invoice.number,
+                        })
+                      }
                     >
                       <Trash2 />
                       Smazat
@@ -257,5 +277,29 @@ export function InvoiceTable({ invoices }: { invoices: Invoice[] }) {
         })}
       </TableBody>
     </Table>
+
+    <Dialog
+      open={pendingDelete !== null}
+      onOpenChange={(open) => !open && setPendingDelete(null)}
+    >
+      <DialogContent showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>Smazat fakturu?</DialogTitle>
+          <DialogDescription>
+            Faktura {pendingDelete?.number} bude trvale odstraněna. Tuto akci
+            nelze vrátit zpět.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setPendingDelete(null)}>
+            Zrušit
+          </Button>
+          <Button variant="destructive" onClick={confirmDelete}>
+            Smazat
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
