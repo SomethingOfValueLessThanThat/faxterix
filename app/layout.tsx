@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Geist_Mono, Outfit } from "next/font/google"
+import { Outfit } from "next/font/google"
 
 import "./globals.css"
 import { Toaster } from "@/components/ui/sonner"
@@ -10,11 +10,6 @@ import { cn } from "@/lib/utils"
 const outfit = Outfit({
   subsets: ["latin", "latin-ext"],
   variable: "--font-sans",
-})
-
-const fontMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
 })
 
 export const metadata: Metadata = {
@@ -30,12 +25,7 @@ export default function RootLayout({
   return (
     <html
       lang="cs"
-      className={cn(
-        "antialiased",
-        fontMono.variable,
-        "font-sans",
-        outfit.variable
-      )}
+      className={cn("antialiased", "font-sans", outfit.variable)}
     >
       <body>
         <ConvexClientProvider>

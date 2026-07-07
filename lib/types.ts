@@ -62,6 +62,19 @@ export interface ClientSnapshot {
   address: Address
 }
 
+/** Perioda pravidelného výdaje. */
+export type ExpensePeriod = "monthly" | "yearly"
+
+/** Pravidelný výdaj (měsíční nebo roční). */
+export interface Expense {
+  _id: Id
+  name: string
+  amount: number
+  period: ExpensePeriod
+  createdAt: number
+  updatedAt: number
+}
+
 /** Profil vystavovatele (moje firma) + platební údaje pro QR. */
 export interface CompanyProfile {
   name: string

@@ -58,6 +58,15 @@ export default defineSchema({
     .index("by_issueDate", ["issueDate"])
     .index("by_variableSymbol", ["variableSymbol"]),
 
+  // Pravidelné výdaje (měsíční / roční). Přepočet na měsíc se počítá v UI.
+  expenses: defineTable({
+    name: v.string(),
+    amount: v.number(),
+    period: v.union(v.literal("monthly"), v.literal("yearly")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_createdAt", ["createdAt"]),
+
   // Profil firmy je singleton – v tabulce drží jediný dokument.
   profile: defineTable({
     name: v.string(),

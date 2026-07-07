@@ -8,7 +8,7 @@ import * as React from "react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
-import type { Client, Invoice, CompanyProfile } from "./types"
+import type { Client, Invoice, CompanyProfile, Expense } from "./types"
 import { emptyAddress } from "./types"
 
 const defaultProfile: CompanyProfile = {
@@ -102,6 +102,30 @@ export function useInvoiceApi() {
       patch: (id: string, data: Invoice) =>
         patch({ id: id as Id<"invoices">, ...invoicePayload(data) }),
       remove: (id: string) => remove({ id: id as Id<"invoices"> }),
+    }),
+    [create, patch, remove]
+  )
+}
+
+// --- Výdaje ----------------------------------------------------------------
+
+export function useExpenses(): Expense[] {
+  return useQuery(api.expenses.list) ?? []
+}
+
+type ExpenseInput = Omit<Expense, "_id" | "createdAt" | "updatedAt">
+
+export function useExpenseApi() {
+  const create = useMutation(api.expenses.create)
+  const patch = useMutation(api.expenses.patch)
+  const remove = useMutation(api.expenses.remove)
+
+  return React.useMemo(
+    () => ({
+      create: (data: ExpenseInput) => create(data),
+      patch: (id: string, data: Partial<ExpenseInput>) =>
+        patch({ id: id as Id<"expenses">, ...data }),
+      remove: (id: string) => remove({ id: id as Id<"expenses"> }),
     }),
     [create, patch, remove]
   )

@@ -5,11 +5,8 @@ import { motion } from "motion/react"
 import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import {
   Wallet,
-  Clock,
-  Receipt,
   Percent,
   TrendingUp,
-  BadgePercent,
   FileCheck,
   ClockAlert,
   HandCoins,
@@ -203,7 +200,7 @@ export function ReportsView() {
                               {revenueConfig[name as keyof typeof revenueConfig]
                                 ?.label ?? name}
                             </span>
-                            <Sensitive className="font-mono font-medium tabular-nums">
+                            <Sensitive className="font-medium tabular-nums">
                               {formatCZK(Number(value))}
                             </Sensitive>
                           </div>

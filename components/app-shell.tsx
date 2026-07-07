@@ -3,7 +3,16 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { FileText, Users, Zap, Settings, LogOut, Eye, EyeOff } from "lucide-react"
+import {
+  FileText,
+  Users,
+  Zap,
+  Wallet,
+  Settings,
+  LogOut,
+  Eye,
+  EyeOff,
+} from "lucide-react"
 import { motion, MotionConfig, LayoutGroup } from "motion/react"
 
 import { cn } from "@/lib/utils"
@@ -17,7 +26,8 @@ const nav = [
   { href: routes.invoices, label: "Faktury", icon: FileText, key: "1" },
   { href: routes.clients, label: "Klienti", icon: Users, key: "2" },
   { href: routes.reports, label: "Reporty", icon: Zap, key: "3" },
-  { href: routes.settings, label: "Nastavení", icon: Settings, key: "4" },
+  { href: routes.expenses, label: "Výdaje", icon: Wallet, key: "4" },
+  { href: routes.settings, label: "Nastavení", icon: Settings, key: "5" },
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
