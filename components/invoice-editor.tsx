@@ -162,15 +162,13 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
   }
 
   async function handlePdf() {
-    if (!validate()) return
-    const saved = await persist()
+    if (!existing) return
     try {
-      await downloadInvoicePdf(saved, profile)
+      await downloadInvoicePdf(draft, profile)
     } catch (err) {
       console.error(err)
       toast.error("Nepodařilo se vytvořit PDF.")
     }
-    if (!existing) router.replace(routes.invoice(saved._id))
   }
 
   useHotkeys(
@@ -199,7 +197,14 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
               <ArrowLeft />
               Zpět
             </Button>
-            <Button variant="outline" onClick={handlePdf}>
+            <Button
+              variant="outline"
+              onClick={handlePdf}
+              disabled={!existing}
+              title={
+                existing ? undefined : "Nejprve fakturu uložte"
+              }
+            >
               <FileDown />
               Export PDF
             </Button>
