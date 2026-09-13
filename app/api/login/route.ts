@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { AUTH_COOKIE, expectedToken, verifyPassword } from "@/lib/auth"
-
-const COOKIE_OPTIONS = {
-  httpOnly: true,
-  sameSite: "lax" as const,
-  secure: process.env.NODE_ENV === "production",
-  path: "/",
-  maxAge: 60 * 60 * 24 * 30, // 30 dní
-}
+import {
+  AUTH_COOKIE,
+  AUTH_COOKIE_OPTIONS,
+  expectedToken,
+  verifyPassword,
+} from "@/lib/auth"
 
 export async function POST(req: NextRequest) {
   let password = ""
@@ -24,13 +21,13 @@ export async function POST(req: NextRequest) {
   }
 
   const res = NextResponse.json({ ok: true })
-  res.cookies.set(AUTH_COOKIE, await expectedToken(), COOKIE_OPTIONS)
+  res.cookies.set(AUTH_COOKIE, await expectedToken(), AUTH_COOKIE_OPTIONS)
   return res
 }
 
 // Odhlášení.
 export async function DELETE() {
   const res = NextResponse.json({ ok: true })
-  res.cookies.set(AUTH_COOKIE, "", { ...COOKIE_OPTIONS, maxAge: 0 })
+  res.cookies.set(AUTH_COOKIE, "", { ...AUTH_COOKIE_OPTIONS, maxAge: 0 })
   return res
 }

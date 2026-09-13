@@ -8,7 +8,7 @@ import * as React from "react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
-import type { Client, Invoice, CompanyProfile, Expense } from "./types"
+import type { Client, Invoice, CompanyProfile, Expense, Passkey } from "./types"
 import { emptyAddress } from "./types"
 
 const defaultProfile: CompanyProfile = {
@@ -192,5 +192,22 @@ export function useProfileApi() {
         }),
     }),
     [save]
+  )
+}
+
+// --- Passkeys --------------------------------------------------------------
+
+export function usePasskeys(): Passkey[] {
+  return useQuery(api.passkeys.list) ?? []
+}
+
+export function usePasskeyApi() {
+  const remove = useMutation(api.passkeys.remove)
+
+  return React.useMemo(
+    () => ({
+      remove: (id: string) => remove({ id: id as Id<"passkeys"> }),
+    }),
+    [remove]
   )
 }

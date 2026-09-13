@@ -3,12 +3,14 @@ import { NextRequest, NextResponse } from "next/server"
 import { AUTH_COOKIE, isValidToken } from "@/lib/auth"
 
 // Cesty, které musí být dostupné i bez přihlášení.
-const PUBLIC_PATHS = ["/login", "/api/login"]
+const PUBLIC_PATHS = ["/login", "/api/login", "/api/passkey/login"]
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+  if (
+    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))
+  ) {
     return NextResponse.next()
   }
 

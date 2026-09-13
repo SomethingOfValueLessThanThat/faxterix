@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PasskeysSection } from "@/components/settings/passkeys-section"
 import {
   Select,
   SelectContent,
@@ -233,10 +234,14 @@ export function SettingsForm() {
               type="number"
               min={0}
               value={draft.flatTaxMonthly}
-              onChange={(e) => setField("flatTaxMonthly", Number(e.target.value))}
+              onChange={(e) =>
+                setField("flatTaxMonthly", Number(e.target.value))
+              }
             />
           </SettingsField>
         </motion.section>
+
+        <PasskeysSection />
 
         <AnimatePresence>
           {dirty && (

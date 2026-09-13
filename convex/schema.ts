@@ -67,6 +67,18 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_createdAt", ["createdAt"]),
 
+  // Passkeys (Touch ID) pro přihlášení. Veřejný klíč je base64url, `counter`
+  // chrání proti replay (Apple ho ale drží na 0).
+  passkeys: defineTable({
+    credentialId: v.string(),
+    publicKey: v.string(),
+    counter: v.number(),
+    transports: v.optional(v.array(v.string())),
+    name: v.string(),
+    createdAt: v.number(),
+    lastUsedAt: v.optional(v.number()),
+  }).index("by_credentialId", ["credentialId"]),
+
   // Profil firmy je singleton – v tabulce drží jediný dokument.
   profile: defineTable({
     name: v.string(),

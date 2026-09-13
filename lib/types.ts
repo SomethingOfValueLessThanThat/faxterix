@@ -75,6 +75,14 @@ export interface Expense {
   updatedAt: number
 }
 
+/** Passkey (Touch ID) pro přihlášení – bez veřejného klíče, ten zná jen server. */
+export interface Passkey {
+  _id: Id
+  name: string
+  createdAt: number
+  lastUsedAt?: number
+}
+
 /** Profil vystavovatele (moje firma) + platební údaje pro QR. */
 export interface CompanyProfile {
   name: string

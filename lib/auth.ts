@@ -5,6 +5,14 @@
 
 export const AUTH_COOKIE = "faxterix_auth"
 
+export const AUTH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === "production",
+  path: "/",
+  maxAge: 60 * 60 * 24 * 30, // 30 dní
+}
+
 function getPassword(): string {
   const pw = process.env.APP_PASSWORD
   if (!pw) {
@@ -28,7 +36,28 @@ export async function verifyPassword(candidate: string): Promise<boolean> {
 }
 
 /** Porovná hodnotu cookie s očekávaným tokenem. */
-export async function isValidToken(token: string | undefined): Promise<boolean> {
+export async function isValidToken(
+  token: string | undefined
+): Promise<boolean> {
   if (!token) return false
   return token === (await expectedToken())
+}
+
+/** HMAC-SHA256 podpis hodnoty klíčem odvozeným z APP_PASSWORD (hex). */
+export async function sign(value: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(getPassword()),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  )
+  const sig = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(value)
+  )
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
 }
