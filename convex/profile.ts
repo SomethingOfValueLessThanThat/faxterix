@@ -25,6 +25,7 @@ const profileFields = {
   selectedBand: v.union(v.literal(1), v.literal(2), v.literal(3)),
   bandLimits: v.array(v.number()),
   flatTaxMonthly: v.optional(v.number()),
+  flatTaxChecklistSince: v.optional(v.string()),
 }
 
 export const save = mutation({
@@ -36,5 +37,18 @@ export const save = mutation({
       return existing._id
     }
     return await ctx.db.insert("profile", args)
+  },
+})
+
+// Zapnutí/vypnutí paušální daně v checklistu plateb. Samostatná mutace, ať se
+// kvůli jednomu poli nemusí posílat (a přepisovat) celý profil.
+export const setFlatTaxChecklist = mutation({
+  args: { since: v.union(v.string(), v.null()) },
+  handler: async (ctx, { since }) => {
+    const existing = await ctx.db.query("profile").first()
+    if (!existing) throw new Error("Profil zatím neexistuje.")
+    await ctx.db.patch(existing._id, {
+      flatTaxChecklistSince: since ?? undefined,
+    })
   },
 })

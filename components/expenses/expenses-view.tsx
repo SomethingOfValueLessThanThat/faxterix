@@ -1,26 +1,21 @@
 "use client"
 
 import * as React from "react"
-import {
-  Plus,
-  Wallet,
-  CalendarClock,
-  CalendarDays,
-  Repeat,
-} from "lucide-react"
+import { Plus, Wallet } from "lucide-react"
 
 import { PageContainer } from "@/components/page-container"
 import { PageHeader } from "@/components/page-header"
-import { FadeIn, Stagger, StaggerItem, transitions } from "@/components/motion"
+import { FadeIn } from "@/components/motion"
 import { Button } from "@/components/ui/button"
-import { Sensitive } from "@/components/ui/sensitive"
-import { StatCard } from "@/components/reports/stat-card"
 import { ExpenseCompositionChart } from "@/components/expenses/expense-composition-chart"
-import { ExpenseList } from "@/components/expenses/expense-list"
 import { ExpenseDialog } from "@/components/expenses/expense-dialog"
+import { ExpenseTabs } from "@/components/expenses/expense-tabs"
 import { useExpenses, useProfile } from "@/lib/store"
-import { expenseSummary, expenseBreakdown } from "@/lib/expenses"
-import { formatCZK } from "@/lib/format"
+import {
+  expenseSummary,
+  expenseBreakdown,
+  checklistCandidates,
+} from "@/lib/expenses"
 import type { Expense } from "@/lib/types"
 
 // Syntetický výdaj pro paušální daň – hodnota se bere z Nastavení. Do CRUD
@@ -34,7 +29,7 @@ export function ExpensesView() {
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<Expense | null>(null)
 
-  // Do souhrnů a grafu započítáme i paušální daň jako běžný měsíční výdaj.
+  // Do grafu započítáme i paušální daň jako běžný měsíční výdaj.
   const allExpenses = React.useMemo<Expense[]>(() => {
     if (flatTaxMonthly <= 0) return expenses
     const flatTax: Expense = {
@@ -55,6 +50,16 @@ export function ExpensesView() {
   const breakdown = React.useMemo(
     () => expenseBreakdown(allExpenses),
     [allExpenses]
+  )
+
+  const candidates = React.useMemo(
+    () =>
+      checklistCandidates(
+        expenses,
+        flatTaxMonthly,
+        profile.flatTaxChecklistSince
+      ),
+    [expenses, flatTaxMonthly, profile.flatTaxChecklistSince]
   )
 
   const hasContent = expenses.length > 0 || flatTaxMonthly > 0
@@ -96,66 +101,22 @@ export function ExpensesView() {
         </FadeIn>
       ) : (
         <div className="flex flex-col gap-6">
-          {/* KPI karty */}
-          <Stagger className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {[
-              <StatCard
-                key="monthly"
-                label="Měsíčně celkem"
-                value={<Sensitive>{formatCZK(summary.monthlyTotal)}</Sensitive>}
-                icon={Wallet}
-                hint="vč. ročních (přepočet)"
-              />,
-              <StatCard
-                key="yearly"
-                label="Ročně celkem"
-                value={<Sensitive>{formatCZK(summary.yearlyTotal)}</Sensitive>}
-                icon={CalendarDays}
-                hint="měsíční přepočet × 12"
-              />,
-              <StatCard
-                key="recurring"
-                label="Měsíční položky"
-                value={
-                  <Sensitive>{formatCZK(summary.monthlyRecurring)}</Sensitive>
-                }
-                icon={Repeat}
-                hint={`${summary.monthlyCount} ${pluralizeItems(summary.monthlyCount)}`}
-              />,
-              <StatCard
-                key="yearlyAsMonthly"
-                label="Roční položky / měs."
-                value={
-                  <Sensitive>{formatCZK(summary.yearlyAsMonthly)}</Sensitive>
-                }
-                icon={CalendarClock}
-                hint={`${summary.yearlyCount} ${pluralizeItems(summary.yearlyCount)}`}
-              />,
-            ].map((card) => (
-              <StaggerItem
-                key={card.key}
-                whileHover={{ y: -4 }}
-                transition={transitions.spring}
-              >
-                {card}
-              </StaggerItem>
-            ))}
-          </Stagger>
-
-          {/* Složení výdajů */}
-          <FadeIn delay={0.1}>
-            <ExpenseCompositionChart
-              breakdown={breakdown}
-              monthlyTotal={summary.monthlyTotal}
-            />
-          </FadeIn>
-
-          {/* Seznam */}
-          <FadeIn delay={0.16}>
-            <ExpenseList
+          {/* Platby (checklist) a seznam výdajů v jedné kartě s taby */}
+          <FadeIn>
+            <ExpenseTabs
+              candidates={candidates}
               expenses={expenses}
               onEdit={openEdit}
               flatTaxMonthly={flatTaxMonthly}
+              flatTaxInChecklist={!!profile.flatTaxChecklistSince}
+            />
+          </FadeIn>
+
+          {/* Složení výdajů */}
+          <FadeIn delay={0.08}>
+            <ExpenseCompositionChart
+              breakdown={breakdown}
+              monthlyTotal={summary.monthlyTotal}
             />
           </FadeIn>
         </div>
@@ -168,10 +129,4 @@ export function ExpensesView() {
       />
     </PageContainer>
   )
-}
-
-function pluralizeItems(n: number): string {
-  if (n === 1) return "položka"
-  if (n >= 2 && n <= 4) return "položky"
-  return "položek"
 }

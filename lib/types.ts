@@ -47,6 +47,8 @@ export interface Invoice {
   taxDate: string
   items: InvoiceItem[]
   status: InvoiceStatus
+  /** Datum úhrady (ISO yyyy-mm-dd), jen u zaplacených faktur. */
+  paidDate?: string
   note: string
   variableSymbol: string
   paymentMethod: string
@@ -71,8 +73,23 @@ export interface Expense {
   name: string
   amount: number
   period: ExpensePeriod
+  /** Měsíc (yyyy-mm), od kdy se výdaj odškrtává v checklistu plateb. */
+  checklistSince?: string
   createdAt: number
   updatedAt: number
+}
+
+/** Položka checklistu: id výdaje, nebo paušální daň (ta dokument výdaje nemá). */
+export type ChecklistItemId = Id | "flatTax"
+
+/** Odškrtnutá platba položky checklistu v daném měsíci. */
+export interface ExpensePayment {
+  _id: Id
+  item: ChecklistItemId
+  month: string // yyyy-mm
+  paidAt: number
+  /** "bank" = spárováno z bankovní notifikace, jinak odškrtnuto ručně. */
+  source?: "bank"
 }
 
 /** Passkey (Touch ID) pro přihlášení – bez veřejného klíče, ten zná jen server. */
@@ -81,6 +98,41 @@ export interface Passkey {
   name: string
   createdAt: number
   lastUsedAt?: number
+}
+
+/** Podmínky smlouvy vytažené AI (a případně opravené ručně). */
+export interface ContractTerms {
+  counterparty: string
+  counterpartyIco?: string
+  summary: string
+  startDate?: string // ISO yyyy-mm-dd
+  /** Konec doby určité; chybí = smlouva na dobu neurčitou. */
+  endDate?: string
+  autoRenewal: boolean
+  /** O kolik měsíců se smlouva automaticky prodlužuje. */
+  renewalMonths?: number
+  notice?: { amount: number; unit: "days" | "months" }
+  rate?: string
+  paymentDays?: number
+  confidentialityUntil?: string
+  keyPoints: string[]
+}
+
+export type ContractExtraction = "pending" | "done" | "failed"
+
+/** Smlouva v trezoru (PDF v Convex storage). */
+export interface Contract {
+  _id: Id
+  title: string
+  fileName: string
+  fileUrl: string | null
+  clientId: Id | null
+  extraction: ContractExtraction
+  extractionError?: string
+  /** Chybí, dokud AI výtah neproběhne. */
+  terms?: ContractTerms
+  createdAt: number
+  updatedAt: number
 }
 
 /** Profil vystavovatele (moje firma) + platební údaje pro QR. */
@@ -103,6 +155,8 @@ export interface CompanyProfile {
   bandLimits: number[]
   /** Měsíční platba paušální daně v Kč. */
   flatTaxMonthly: number
+  /** Měsíc (yyyy-mm), od kdy se paušální daň odškrtává v checklistu plateb. */
+  flatTaxChecklistSince?: string
 }
 
 export const emptyAddress = (): Address => ({

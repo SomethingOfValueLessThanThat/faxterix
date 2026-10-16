@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "motion/react"
-import { Trash2, Settings } from "lucide-react"
+import { Trash2, Settings, ListChecks } from "lucide-react"
 import { toast } from "sonner"
 
 import { transitions } from "@/components/motion"
@@ -20,28 +20,36 @@ export function ExpenseList({
   expenses,
   onEdit,
   flatTaxMonthly = 0,
+  flatTaxInChecklist = false,
 }: {
   expenses: Expense[]
   onEdit: (expense: Expense) => void
   /** Měsíční paušální daň z nastavení – zobrazí se jako výdaj „jen ke čtení". */
   flatTaxMonthly?: number
+  flatTaxInChecklist?: boolean
 }) {
   return (
-    <div className="rounded-xl bg-card px-2 py-2 text-sm text-card-foreground shadow-xs ring-1 ring-foreground/10">
-      <ul>
-        {flatTaxMonthly > 0 && <FlatTaxRow amount={flatTaxMonthly} />}
-        <AnimatePresence initial={false} mode="popLayout">
-          {expenses.map((expense) => (
-            <ExpenseRow key={expense._id} expense={expense} onEdit={onEdit} />
-          ))}
-        </AnimatePresence>
-      </ul>
-    </div>
+    <ul className="grid gap-3 md:grid-cols-2">
+      {flatTaxMonthly > 0 && (
+        <FlatTaxRow amount={flatTaxMonthly} inChecklist={flatTaxInChecklist} />
+      )}
+      <AnimatePresence initial={false} mode="popLayout">
+        {expenses.map((expense) => (
+          <ExpenseRow key={expense._id} expense={expense} onEdit={onEdit} />
+        ))}
+      </AnimatePresence>
+    </ul>
   )
 }
 
 /** Řádek paušální daně – hodnota se bere z Nastavení, edituje se tam. */
-function FlatTaxRow({ amount }: { amount: number }) {
+function FlatTaxRow({
+  amount,
+  inChecklist,
+}: {
+  amount: number
+  inChecklist: boolean
+}) {
   const router = useRouter()
   const goToSettings = () => router.push(routes.settings)
 
@@ -57,7 +65,7 @@ function FlatTaxRow({ amount }: { amount: number }) {
             goToSettings()
           }
         }}
-        className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-muted/50"
+        className="flex h-full cursor-pointer items-center gap-3 rounded-xl px-4 py-3 ring-1 ring-foreground/10 transition-colors ring-inset hover:bg-muted/40 hover:ring-foreground/20"
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -65,6 +73,7 @@ function FlatTaxRow({ amount }: { amount: number }) {
             <Badge variant="outline" className="shrink-0">
               Z nastavení
             </Badge>
+            {inChecklist && <ChecklistMark />}
           </div>
         </div>
 
@@ -127,7 +136,7 @@ function ExpenseRow({
             onEdit(expense)
           }
         }}
-        className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-muted/50"
+        className="flex h-full cursor-pointer items-center gap-3 rounded-xl px-4 py-3 ring-1 ring-foreground/10 transition-colors ring-inset hover:bg-muted/40 hover:ring-foreground/20"
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -135,6 +144,7 @@ function ExpenseRow({
             <Badge variant={yearly ? "info" : "outline"} className="shrink-0">
               {yearly ? "Ročně" : "Měsíčně"}
             </Badge>
+            {expense.checklistSince && <ChecklistMark />}
           </div>
           {yearly && (
             <p className="mt-0.5 text-xs text-muted-foreground">
@@ -164,5 +174,15 @@ function ExpenseRow({
         </Button>
       </div>
     </motion.li>
+  )
+}
+
+/** Značka, že se výdaj odškrtává v měsíčním checklistu plateb. */
+function ChecklistMark() {
+  return (
+    <ListChecks
+      aria-label="V checklistu plateb"
+      className="size-3.5 shrink-0 text-muted-foreground"
+    />
   )
 }

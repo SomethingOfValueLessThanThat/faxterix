@@ -6,7 +6,11 @@ import {
   MoreHorizontal,
   Pencil,
   FileDown,
+  Eye,
   Trash2,
+  Copy,
+  CircleCheck,
+  CircleDashed,
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
@@ -29,6 +33,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -41,8 +46,9 @@ import {
 } from "@/components/ui/dialog"
 import { useProfile, useInvoiceApi } from "@/lib/store"
 import { computeTotals } from "@/lib/invoice"
-import { formatCZK, formatDate } from "@/lib/format"
+import { formatCZK, formatDate, todayISO } from "@/lib/format"
 import { downloadInvoicePdf } from "@/lib/pdf/generate"
+import { InvoicePdfDialog } from "@/components/invoices/invoice-pdf-dialog"
 import { routes } from "@/lib/routes"
 import { cn } from "@/lib/utils"
 import type { Invoice, InvoiceStatus } from "@/lib/types"
@@ -62,7 +68,13 @@ const statusOrder: Record<InvoiceStatus, number> = {
   paid: 2,
 }
 
-type SortKey = "number" | "client" | "issueDate" | "dueDate" | "status" | "total"
+type SortKey =
+  | "number"
+  | "client"
+  | "issueDate"
+  | "dueDate"
+  | "status"
+  | "total"
 type SortDirection = "asc" | "desc"
 
 interface SortState {
@@ -120,6 +132,7 @@ export function InvoiceTable({ invoices }: { invoices: Invoice[] }) {
     key: "number",
     direction: "desc",
   })
+  const [preview, setPreview] = React.useState<Invoice | null>(null)
   const [pendingDelete, setPendingDelete] = React.useState<{
     id: string
     number: string
@@ -181,6 +194,20 @@ export function InvoiceTable({ invoices }: { invoices: Invoice[] }) {
     }
   }
 
+  async function setPaid(invoice: Invoice, paid: boolean) {
+    await invoiceApi.patch(
+      invoice._id,
+      paid
+        ? { ...invoice, status: "paid", paidDate: todayISO() }
+        : { ...invoice, status: "sent", paidDate: undefined }
+    )
+    toast.success(
+      paid
+        ? `Faktura ${invoice.number} označena jako zaplacená.`
+        : `Faktura ${invoice.number} vrácena mezi nezaplacené.`
+    )
+  }
+
   async function confirmDelete() {
     if (!pendingDelete) return
     await invoiceApi.remove(pendingDelete.id)
@@ -190,126 +217,169 @@ export function InvoiceTable({ invoices }: { invoices: Invoice[] }) {
 
   return (
     <>
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <SortableHead sortKey="number" sort={sort} onSort={toggleSort}>
-            Číslo
-          </SortableHead>
-          <SortableHead sortKey="client" sort={sort} onSort={toggleSort}>
-            Klient
-          </SortableHead>
-          <SortableHead sortKey="issueDate" sort={sort} onSort={toggleSort}>
-            Vystaveno
-          </SortableHead>
-          <SortableHead sortKey="dueDate" sort={sort} onSort={toggleSort}>
-            Splatnost
-          </SortableHead>
-          <SortableHead sortKey="status" sort={sort} onSort={toggleSort}>
-            Stav
-          </SortableHead>
-          <SortableHead
-            sortKey="total"
-            align="right"
-            sort={sort}
-            onSort={toggleSort}
-          >
-            Částka
-          </SortableHead>
-          <TableHead className="w-10" />
-        </TableRow>
-      </TableHeader>
-      <motion.tbody
-        className="[&_tr:last-child]:border-0"
-        variants={staggerContainer}
-        initial="hidden"
-        animate="show"
-      >
-        {sortedInvoices.map((invoice) => {
-          const total = totals.get(invoice._id) ?? 0
-          const meta = statusMeta[invoice.status]
-          return (
-            <motion.tr
-              key={invoice._id}
-              variants={fadeInUp}
-              className="cursor-pointer border-b border-border transition-colors hover:bg-muted/30"
-              onClick={() => router.push(routes.invoice(invoice._id))}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <SortableHead sortKey="number" sort={sort} onSort={toggleSort}>
+              Číslo
+            </SortableHead>
+            <SortableHead sortKey="client" sort={sort} onSort={toggleSort}>
+              Klient
+            </SortableHead>
+            <SortableHead sortKey="issueDate" sort={sort} onSort={toggleSort}>
+              Vystaveno
+            </SortableHead>
+            <SortableHead sortKey="dueDate" sort={sort} onSort={toggleSort}>
+              Splatnost
+            </SortableHead>
+            <SortableHead sortKey="status" sort={sort} onSort={toggleSort}>
+              Stav
+            </SortableHead>
+            <SortableHead
+              sortKey="total"
+              align="right"
+              sort={sort}
+              onSort={toggleSort}
             >
-              <TableCell>{invoice.number}</TableCell>
-              <TableCell className="text-muted-foreground">
-                {invoice.client?.name ?? "—"}
-              </TableCell>
-              <TableCell>{formatDate(invoice.issueDate)}</TableCell>
-              <TableCell>{formatDate(invoice.dueDate)}</TableCell>
-              <TableCell>
-                <Badge variant={meta.variant}>{meta.label}</Badge>
-              </TableCell>
-              <TableCell className="text-right">
-                <Sensitive>{formatCZK(total)}</Sensitive>
-              </TableCell>
-              <TableCell onClick={(e) => e.stopPropagation()}>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button variant="ghost" size="icon-sm">
-                        <MoreHorizontal />
-                      </Button>
+              Částka
+            </SortableHead>
+            <TableHead className="w-10" />
+          </TableRow>
+        </TableHeader>
+        <motion.tbody
+          className="[&_tr:last-child]:border-0"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="show"
+        >
+          {sortedInvoices.map((invoice) => {
+            const total = totals.get(invoice._id) ?? 0
+            const meta = statusMeta[invoice.status]
+            return (
+              <motion.tr
+                key={invoice._id}
+                variants={fadeInUp}
+                className="cursor-pointer border-b border-border transition-colors hover:bg-muted/30"
+                onClick={() => router.push(routes.invoice(invoice._id))}
+              >
+                <TableCell>{invoice.number}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {invoice.client?.name ?? "—"}
+                </TableCell>
+                <TableCell>{formatDate(invoice.issueDate)}</TableCell>
+                <TableCell>{formatDate(invoice.dueDate)}</TableCell>
+                <TableCell>
+                  <Badge
+                    variant={meta.variant}
+                    title={
+                      invoice.paidDate
+                        ? `Uhrazeno ${formatDate(invoice.paidDate)}`
+                        : undefined
                     }
-                  />
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() => router.push(routes.invoice(invoice._id))}
-                    >
-                      <Pencil />
-                      Upravit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => openPdf(invoice)}>
-                      <FileDown />
-                      Stáhnout PDF
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onClick={() =>
-                        setPendingDelete({
-                          id: invoice._id,
-                          number: invoice.number,
-                        })
+                  >
+                    {meta.label}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <Sensitive>{formatCZK(total)}</Sensitive>
+                </TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button variant="ghost" size="icon-sm">
+                          <MoreHorizontal />
+                        </Button>
                       }
+                    />
+                    <DropdownMenuContent
+                      align="end"
+                      className="w-auto min-w-52 whitespace-nowrap"
                     >
-                      <Trash2 />
-                      Smazat
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </TableCell>
-            </motion.tr>
-          )
-        })}
-      </motion.tbody>
-    </Table>
+                      <DropdownMenuItem
+                        onClick={() => router.push(routes.invoice(invoice._id))}
+                      >
+                        <Pencil />
+                        Upravit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setPreview(invoice)}>
+                        <Eye />
+                        Náhled PDF
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openPdf(invoice)}>
+                        <FileDown />
+                        Stáhnout PDF
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          router.push(routes.duplicateInvoice(invoice._id))
+                        }
+                      >
+                        <Copy />
+                        Duplikovat
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      {invoice.status === "paid" ? (
+                        <DropdownMenuItem
+                          onClick={() => setPaid(invoice, false)}
+                        >
+                          <CircleDashed />
+                          Označit jako nezaplacenou
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem
+                          onClick={() => setPaid(invoice, true)}
+                        >
+                          <CircleCheck />
+                          Označit jako zaplacenou
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() =>
+                          setPendingDelete({
+                            id: invoice._id,
+                            number: invoice.number,
+                          })
+                        }
+                      >
+                        <Trash2 />
+                        Smazat
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </motion.tr>
+            )
+          })}
+        </motion.tbody>
+      </Table>
 
-    <Dialog
-      open={pendingDelete !== null}
-      onOpenChange={(open) => !open && setPendingDelete(null)}
-    >
-      <DialogContent showCloseButton={false}>
-        <DialogHeader>
-          <DialogTitle>Smazat fakturu?</DialogTitle>
-          <DialogDescription>
-            Faktura {pendingDelete?.number} bude trvale odstraněna. Tuto akci
-            nelze vrátit zpět.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setPendingDelete(null)}>
-            Zrušit
-          </Button>
-          <Button variant="destructive" onClick={confirmDelete}>
-            Smazat
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <InvoicePdfDialog invoice={preview} onClose={() => setPreview(null)} />
+
+      <Dialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+      >
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Smazat fakturu?</DialogTitle>
+            <DialogDescription>
+              Faktura {pendingDelete?.number} bude trvale odstraněna. Tuto akci
+              nelze vrátit zpět.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDelete(null)}>
+              Zrušit
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Smazat
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

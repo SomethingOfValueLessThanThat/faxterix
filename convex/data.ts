@@ -33,6 +33,7 @@ const incomingInvoice = v.object({
   taxDate: v.string(),
   items: v.array(invoiceItemValidator),
   status: v.union(v.literal("draft"), v.literal("sent"), v.literal("paid")),
+  paidDate: v.optional(v.string()),
   note: v.string(),
   variableSymbol: v.string(),
   paymentMethod: v.string(),

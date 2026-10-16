@@ -2,13 +2,12 @@
 // aby šly snadno testovat i znovu použít. Částky počítáme přes computeTotals,
 // takže DPH respektuje, zda je firma plátce (vatPayer).
 
-import { format, subMonths } from "date-fns"
+import { differenceInCalendarDays, format, subMonths } from "date-fns"
 import { cs } from "date-fns/locale"
 
 import type { Invoice, Client, InvoiceStatus } from "./types"
-import { computeTotals } from "./invoice"
-import { round2 } from "./invoice"
-import { todayISO } from "./format"
+import { computeTotals, round2 } from "./invoice"
+import { toLocalISODate, todayISO } from "./format"
 
 /** Částka k úhradě (vč. DPH) jedné faktury. */
 export function invoiceTotal(inv: Invoice, vatPayer: boolean): number {
@@ -172,54 +171,179 @@ export function topClients(
     map.set(name, entry)
   }
 
-  return [...map.values()]
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, limit)
+  return [...map.values()].sort((a, b) => b.amount - a.amount).slice(0, limit)
 }
 
-/** Tržby za poslední rok. */
+/**
+ * Den, kdy faktura přinesla peníze (null = nezaplacená). Faktury zaplacené před
+ * zavedením `paidDate` datum úhrady nemají – bereme datum vystavení jako odhad.
+ */
+export function paidOn(inv: Invoice): string | null {
+  if (inv.status !== "paid") return null
+  return inv.paidDate || inv.issueDate || null
+}
+
+/** Příjmy za posledních 12 měsíců podle data úhrady. */
 export function yearRevenue(
   invoices: Invoice[],
-  vatPayer: boolean
+  vatPayer: boolean,
+  today = new Date()
 ): number {
-  const oneYearAgo = new Date()
-  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-  const oneYearAgoISO = oneYearAgo.toISOString().split("T")[0]
-
+  const from = toLocalISODate(subMonths(today, 12))
   let total = 0
   for (const inv of invoices) {
-    if (inv.issueDate && inv.issueDate >= oneYearAgoISO && inv.status === "paid") {
-      total += invoiceTotal(inv, vatPayer)
-    }
+    const paid = paidOn(inv)
+    if (paid && paid > from) total += invoiceTotal(inv, vatPayer)
   }
   return round2(total)
 }
 
+export type BandStatus = "ok" | "warning" | "over"
+
 export interface BandProgress {
   band: number
   limit: number
-  current: number
+  year: number
+  current: number // přijato v letošním kalendářním roce
+  pending: number // odeslané, zatím nezaplacené faktury
+  projected: number // odhad příjmů za celý rok
   remaining: number
   percentage: number
+  status: BandStatus
 }
 
-/** Pokrok k dosažení limitu daného pasma. */
+/** Od kolika procent limitu (aktuálních nebo odhadovaných) varujeme. */
+const WARNING_RATIO = 0.8
+
+/**
+ * Čerpání limitu pásma paušální daně. Limit se vztahuje k příjmům za kalendářní
+ * rok, a to podle data přijetí peněz – faktura vystavená v prosinci a zaplacená
+ * v lednu patří do dalšího roku.
+ */
 export function bandProgress(
   invoices: Invoice[],
   vatPayer: boolean,
   band: number,
-  bandLimits: number[]
+  bandLimits: number[],
+  today = new Date()
 ): BandProgress {
-  const current = yearRevenue(invoices, vatPayer)
-  const limit = bandLimits[band - 1] ?? bandLimits[2] ?? 5_000_000
-  const remaining = Math.max(0, limit - current)
-  const percentage = current >= limit ? 100 : round2((current / limit) * 100)
+  const year = today.getFullYear()
+  const todayISO = toLocalISODate(today)
+  const windowStart = toLocalISODate(subMonths(today, 12))
+  let current = 0
+  let pending = 0
+  let last12 = 0
+
+  for (const inv of invoices) {
+    const total = invoiceTotal(inv, vatPayer)
+    const paid = paidOn(inv)
+    if (paid) {
+      if (paid.startsWith(String(year))) current += total
+      if (paid > windowStart && paid <= todayISO) last12 += total
+    } else if (inv.status === "sent") {
+      pending += total
+    }
+  }
+
+  // Zbytek roku dopočítáme tempem posledních 12 měsíců – extrapolace jen z
+  // letoška by byla na začátku roku (pár týdnů dat) velmi nespolehlivá.
+  const daysLeft = differenceInCalendarDays(new Date(year, 11, 31), today)
+  const projected = current + (last12 / 365) * Math.max(0, daysLeft)
+
+  const limit = bandLimits[band - 1] ?? bandLimits[2] ?? 2_000_000
+  const status: BandStatus =
+    current >= limit
+      ? "over"
+      : Math.max(current, projected) >= limit * WARNING_RATIO
+        ? "warning"
+        : "ok"
 
   return {
     band,
     limit,
-    current,
-    remaining: round2(remaining),
-    percentage,
+    year,
+    current: round2(current),
+    pending: round2(pending),
+    projected: round2(projected),
+    remaining: round2(Math.max(0, limit - current)),
+    percentage: current >= limit ? 100 : round2((current / limit) * 100),
+    status,
+  }
+}
+
+/**
+ * Měsíční paušální daň podle pásma [1., 2., 3.] pro rok 2026.
+ * Částky se mění každý rok – v lednu aktualizovat.
+ */
+export const FLAT_TAX_BY_BAND = [9_984, 16_745, 27_139]
+
+export interface InvoiceBandImpact {
+  year: number // rok, do jehož limitu faktura spadne
+  band: number
+  limit: number
+  before: number // přijato + očekáváno v daném roce bez této faktury
+  after: number
+  /** Pásmo, do kterého se příjmy po faktuře vejdou; null = nad limity všech pásem. */
+  newBand: number | null
+  /** O kolik je paušál v novém pásmu za rok vyšší (0, pokud se pásmo nemění). */
+  extraTaxYearly: number
+  status: BandStatus
+}
+
+/**
+ * Kdy peníze z faktury nejspíš přijdou: zaplacená podle data úhrady, ostatní
+ * podle splatnosti – ale ne dřív než dnes, faktura po splatnosti se zaplatí až teď.
+ */
+function expectedPaymentDate(inv: Invoice, today: string): string {
+  const paid = paidOn(inv)
+  if (paid) return paid
+  const due = inv.dueDate || inv.issueDate
+  return due > today ? due : today
+}
+
+/**
+ * Dopad rozepsané faktury na limit pásma paušální daně. Na rozdíl od
+ * `bandProgress` počítá i s nezaplacenými fakturami – ty peníze do limitu
+ * nejspíš dorazí taky. Paušální režim je jen pro neplátce DPH, proto bez DPH.
+ */
+export function invoiceBandImpact(
+  invoice: Invoice,
+  invoices: Invoice[],
+  band: number,
+  bandLimits: number[],
+  today = todayISO()
+): InvoiceBandImpact {
+  const year = expectedPaymentDate(invoice, today).slice(0, 4)
+  let before = 0
+  for (const inv of invoices) {
+    if (inv._id === invoice._id || inv.status === "draft") continue
+    if (expectedPaymentDate(inv, today).startsWith(year)) {
+      before += invoiceTotal(inv, false)
+    }
+  }
+  const after = before + invoiceTotal(invoice, false)
+
+  const limit = bandLimits[band - 1] ?? bandLimits[2] ?? 2_000_000
+  const fitIndex = bandLimits.findIndex((l) => after <= l)
+  const newBand = fitIndex === -1 ? null : fitIndex + 1
+  const extraTaxYearly =
+    newBand !== null && newBand > band
+      ? (FLAT_TAX_BY_BAND[newBand - 1] - FLAT_TAX_BY_BAND[band - 1]) * 12
+      : 0
+
+  return {
+    year: Number(year),
+    band,
+    limit,
+    before: round2(before),
+    after: round2(after),
+    newBand,
+    extraTaxYearly,
+    status:
+      after > limit
+        ? "over"
+        : after >= limit * WARNING_RATIO
+          ? "warning"
+          : "ok",
   }
 }

@@ -1,9 +1,12 @@
 import { internalMutation } from "./_generated/server"
 import { v } from "convex/values"
+import type { Id } from "./_generated/dataModel"
 import { computeTotals, round2 } from "../lib/invoice"
+import { checklistCandidates, itemsForMonth } from "../lib/expenses"
 
-// Párování příchozí bankovní platby na fakturu. Voláno z webhooku
-// (`convex/http.ts`) jako interní mutace – není součástí veřejného API.
+// Párování bankovních plateb: příchozí → faktura (VS + částka), odchozí →
+// položka checklistu výdajů (jen částka). Voláno z webhooku (`convex/http.ts`)
+// jako interní mutace – není součástí veřejného API.
 
 export type ApplyPaymentStatus =
   | "matched" // faktura nalezena podle VS + částky a přepnuta na „paid"
@@ -20,8 +23,9 @@ export const applyIncomingPayment = internalMutation({
   args: {
     vs: v.string(),
     amount: v.number(),
+    paidDate: v.string(), // yyyy-mm-dd
   },
-  handler: async (ctx, { vs, amount }) => {
+  handler: async (ctx, { vs, amount, paidDate }) => {
     const candidates = await ctx.db
       .query("invoices")
       .withIndex("by_variableSymbol", (q) => q.eq("variableSymbol", vs))
@@ -33,7 +37,7 @@ export const applyIncomingPayment = internalMutation({
 
     const profile = await ctx.db.query("profile").first()
     const vatPayer = profile?.vatPayer ?? false
-    const matchesAmount = (items: typeof candidates[number]["items"]) =>
+    const matchesAmount = (items: (typeof candidates)[number]["items"]) =>
       round2(computeTotals(items, vatPayer).total) === round2(amount)
 
     // Idempotence: platba už dorazila dřív a faktura je zaplacená.
@@ -58,7 +62,66 @@ export const applyIncomingPayment = internalMutation({
     }
 
     const invoice = unpaidMatches[0]
-    await ctx.db.patch(invoice._id, { status: "paid", updatedAt: Date.now() })
+    await ctx.db.patch(invoice._id, {
+      status: "paid",
+      paidDate,
+      updatedAt: Date.now(),
+    })
     return { status: "matched" as ApplyPaymentStatus, invoiceId: invoice._id }
+  },
+})
+
+export type ApplyOutgoingStatus =
+  | "matched" // položka checklistu odškrtnuta
+  | "already_paid" // všechny položky s touto částkou už jsou v měsíci zaplacené
+  | "no_item" // žádná položka checklistu s touto částkou
+
+/**
+ * Odchozí platba → odškrtne položku checklistu se stejnou částkou v měsíci
+ * platby. Víc položek se stejnou částkou se odškrtává postupně (první
+ * nezaplacená), takže dvě platby po 550 Kč pokryjí dvě položky po 550 Kč.
+ */
+export const applyOutgoingPayment = internalMutation({
+  args: {
+    amount: v.number(),
+    month: v.string(), // yyyy-mm
+    paidAt: v.number(),
+  },
+  handler: async (ctx, { amount, month, paidAt }) => {
+    const [expenses, profile] = await Promise.all([
+      ctx.db.query("expenses").withIndex("by_createdAt").collect(),
+      ctx.db.query("profile").first(),
+    ])
+    const items = itemsForMonth(
+      checklistCandidates(
+        expenses,
+        profile?.flatTaxMonthly ?? 0,
+        profile?.flatTaxChecklistSince
+      ),
+      month
+    ).filter((item) => round2(item.amount) === round2(amount))
+
+    if (items.length === 0) {
+      return { status: "no_item" as ApplyOutgoingStatus }
+    }
+
+    for (const item of items) {
+      const id = item.id as Id<"expenses"> | "flatTax"
+      const existing = await ctx.db
+        .query("expensePayments")
+        .withIndex("by_item_and_month", (q) =>
+          q.eq("item", id).eq("month", month)
+        )
+        .unique()
+      if (existing) continue
+      await ctx.db.insert("expensePayments", {
+        item: id,
+        month,
+        paidAt,
+        source: "bank",
+      })
+      return { status: "matched" as ApplyOutgoingStatus, item: item.name }
+    }
+    return { status: "already_paid" as ApplyOutgoingStatus }
   },
 })

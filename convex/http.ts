@@ -4,7 +4,8 @@ import { internal } from "./_generated/api"
 import { parseRaiffeisenEmail, htmlToText } from "../lib/bank-email"
 
 // Webhook pro CloudMailin: Raiffka pošle email o pohybu na účtu → CloudMailin
-// udělá HTTP POST sem. Email zparsujeme a spárujeme fakturu podle VS.
+// udělá HTTP POST sem. Příchozí platbu spárujeme s fakturou podle VS, odchozí
+// odškrtne položku checklistu výdajů se stejnou částkou.
 //
 // Endpoint je veřejný, proto ho chráníme sdíleným tajemstvím (env
 // CLOUDMAILIN_SECRET, `npx convex env set CLOUDMAILIN_SECRET <hodnota>`).
@@ -77,7 +78,9 @@ async function extractPlain(req: Request): Promise<string> {
 const cloudmailin = httpAction(async (ctx, req) => {
   const secret = process.env.CLOUDMAILIN_SECRET
   if (!secret) {
-    console.error("cloudmailin: CLOUDMAILIN_SECRET není nastaven na deploymentu")
+    console.error(
+      "cloudmailin: CLOUDMAILIN_SECRET není nastaven na deploymentu"
+    )
     return json({ error: "server_misconfigured" }, 500)
   }
 
@@ -99,15 +102,37 @@ const cloudmailin = httpAction(async (ctx, req) => {
   }
 
   const parsed = parseRaiffeisenEmail(plain)
-  if (!parsed || !parsed.isIncoming) {
+  if (!parsed) {
     // Bez dumpu těla (osobní data) – jen délka pro případnou diagnostiku.
-    console.log(`cloudmailin: ignored (parsed=${!!parsed}, len=${plain.length})`)
+    console.log(`cloudmailin: ignored (unparsed, len=${plain.length})`)
+    return json({ status: "ignored" })
+  }
+
+  // Odchozí platba → odškrtnutí položky checklistu výdajů podle částky.
+  if (!parsed.isIncoming) {
+    const result = await ctx.runMutation(
+      internal.payments.applyOutgoingPayment,
+      {
+        amount: parsed.amount,
+        month: paymentDay(parsed.receivedAt).slice(0, 7),
+        paidAt: Date.now(),
+      }
+    )
+    console.log(
+      `cloudmailin: odchozí ${parsed.amount} ${parsed.currency} → ${result.status}`
+    )
+    return json(result)
+  }
+
+  if (!parsed.vs) {
+    console.log(`cloudmailin: ignored (příchozí bez VS)`)
     return json({ status: "ignored" })
   }
 
   const result = await ctx.runMutation(internal.payments.applyIncomingPayment, {
     vs: parsed.vs,
     amount: parsed.amount,
+    paidDate: paymentDay(parsed.receivedAt),
   })
 
   console.log(
@@ -115,6 +140,15 @@ const cloudmailin = httpAction(async (ctx, req) => {
   )
   return json(result)
 })
+
+/**
+ * Den platby (yyyy-mm-dd). `receivedAt` z parseru nese „nástěnný" čas banky
+ * (Convex běží v UTC), takže stačí useknout ISO; bez data bereme dnešek v Praze.
+ */
+function paymentDay(receivedAt: string | null): string {
+  if (receivedAt) return receivedAt.slice(0, 10)
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Prague" })
+}
 
 const http = httpRouter()
 http.route({ path: "/cloudmailin", method: "POST", handler: cloudmailin })

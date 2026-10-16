@@ -16,8 +16,10 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { useExpenseApi } from "@/lib/store"
+import { monthKey } from "@/lib/expenses"
 import type { Expense, ExpensePeriod } from "@/lib/types"
 
 /** Převede uživatelský vstup na číslo (přijme i desetinnou čárku). */
@@ -73,6 +75,9 @@ function ExpenseForm({
   const [period, setPeriod] = React.useState<ExpensePeriod>(
     expense?.period ?? "monthly"
   )
+  const [inChecklist, setInChecklist] = React.useState(
+    !!expense?.checklistSince
+  )
   const [saving, setSaving] = React.useState(false)
 
   async function submit(e: React.FormEvent) {
@@ -88,13 +93,29 @@ function ExpenseForm({
       toast.error("Zadejte kladnou částku.")
       return
     }
+    // Checklist je jen pro měsíční výdaje; už zařazený výdaj si drží původní
+    // měsíc, aby se mu nezahodila historie.
+    const checklistSince =
+      period === "monthly" && inChecklist
+        ? (expense?.checklistSince ?? monthKey())
+        : null
     setSaving(true)
     try {
       if (expense) {
-        await api.patch(expense._id, { name: trimmed, amount: value, period })
+        await api.patch(expense._id, {
+          name: trimmed,
+          amount: value,
+          period,
+          checklistSince,
+        })
         toast.success("Výdaj upraven.")
       } else {
-        await api.create({ name: trimmed, amount: value, period })
+        await api.create({
+          name: trimmed,
+          amount: value,
+          period,
+          checklistSince: checklistSince ?? undefined,
+        })
         toast.success("Výdaj přidán.")
       }
       onDone()
@@ -135,6 +156,18 @@ function ExpenseForm({
         <Label className="text-xs">Perioda</Label>
         <PeriodToggle value={period} onChange={setPeriod} />
       </div>
+
+      {period === "monthly" && (
+        <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl px-3 py-2.5 ring-1 ring-foreground/10">
+          <span className="min-w-0">
+            <span className="block text-sm">Odškrtávat každý měsíc</span>
+            <span className="block text-xs text-muted-foreground">
+              Platím ručně – hlídat v checklistu plateb
+            </span>
+          </span>
+          <Switch checked={inChecklist} onCheckedChange={setInChecklist} />
+        </label>
+      )}
 
       <DialogFooter className="pt-2">
         <Button type="button" variant="outline" onClick={onDone}>

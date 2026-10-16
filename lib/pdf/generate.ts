@@ -24,7 +24,8 @@ async function buildQrDataUrl(
   return QRCode.toDataURL(payload, { margin: 1, width: 320 })
 }
 
-async function buildBlob(
+/** Vyrenderuje PDF faktury do blobu. */
+export async function renderInvoicePdf(
   invoice: Invoice,
   profile: CompanyProfile
 ): Promise<Blob> {
@@ -37,8 +38,20 @@ async function buildBlob(
   return pdf(InvoiceDocument({ invoice, profile, qrDataUrl })).toBlob()
 }
 
-function fileName(invoice: Invoice): string {
+export function invoicePdfFileName(invoice: Invoice): string {
   return `faktura-${invoice.number.replace(/[^\w-]/g, "")}.pdf`
+}
+
+/** Uloží blob jako soubor přes dočasný odkaz. */
+export function saveBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 /** Stáhne PDF faktury. */
@@ -46,24 +59,8 @@ export async function downloadInvoicePdf(
   invoice: Invoice,
   profile: CompanyProfile
 ) {
-  const blob = await buildBlob(invoice, profile)
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url
-  a.download = fileName(invoice)
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
-/** Otevře náhled PDF v nové záložce. */
-export async function openInvoicePdf(
-  invoice: Invoice,
-  profile: CompanyProfile
-) {
-  const blob = await buildBlob(invoice, profile)
-  const url = URL.createObjectURL(blob)
-  window.open(url, "_blank")
-  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  saveBlob(
+    await renderInvoicePdf(invoice, profile),
+    invoicePdfFileName(invoice)
+  )
 }

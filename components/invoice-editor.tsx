@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Trash2, FileDown, ArrowLeft, Check } from "lucide-react"
+import { Plus, Trash2, FileDown, ArrowLeft, Check, Eye } from "lucide-react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/page-header"
@@ -41,6 +41,8 @@ import {
 import { CalendarIcon } from "lucide-react"
 import { cs } from "date-fns/locale"
 import { downloadInvoicePdf } from "@/lib/pdf/generate"
+import { InvoicePdfDialog } from "@/components/invoices/invoice-pdf-dialog"
+import { BandImpact } from "@/components/invoices/band-impact"
 import { buildSpayd, czechAccountToIban } from "@/lib/spayd"
 import type {
   Invoice,
@@ -67,18 +69,30 @@ function snapshotOf(client: Client | undefined) {
   }
 }
 
-export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
+/**
+ * `invoiceId` = úprava existující faktury, `duplicateOf` = nová faktura
+ * předvyplněná podle jiné (klient, položky, způsob platby).
+ */
+export function InvoiceEditor({
+  invoiceId,
+  duplicateOf,
+}: {
+  invoiceId?: string
+  duplicateOf?: string
+}) {
   const router = useRouter()
   const clients = useClients()
   const profile = useProfile()
   const invoices = useInvoices()
   const existing = useInvoice(invoiceId)
+  const source = useInvoice(duplicateOf)
   const invoiceApi = useInvoiceApi()
 
   const [draft, setDraft] = React.useState<Invoice>(() =>
     existing ? structuredClone(existing) : createDraft(invoices, profile)
   )
   const [errors, setErrors] = React.useState<Record<string, string>>({})
+  const [previewOpen, setPreviewOpen] = React.useState(false)
   // Faktura z Convexu přichází asynchronně – jakmile dorazí, promítneme ji do
   // draftu. Ref drží id už načtené faktury, aby se nepřepisovaly úpravy uživatele.
   const loadedId = React.useRef<string | null>(null)
@@ -88,6 +102,14 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
       loadedId.current = existing._id
     }
   }, [existing])
+  // Předlohu převezmeme až s načteným seznamem faktur, jinak by se nové číslo
+  // spočítalo z prázdného seznamu. Existuje-li předloha, seznam prázdný není.
+  React.useEffect(() => {
+    if (source && invoices.length > 0 && loadedId.current !== source._id) {
+      setDraft(duplicateDraft(source, invoices, clients, profile))
+      loadedId.current = source._id
+    }
+  }, [source, invoices, clients, profile])
 
   const totals = React.useMemo(
     () => computeTotals(draft.items, profile.vatPayer),
@@ -145,13 +167,23 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
   }
 
   async function persist(): Promise<Invoice> {
-    const toSave = { ...draft, status: "sent" as InvoiceStatus }
+    // Uložením se koncept stává odeslanou fakturou; zaplacená zůstává zaplacená.
+    const status: InvoiceStatus = draft.status === "paid" ? "paid" : "sent"
+    const toSave = { ...draft, status }
     if (existing) {
       await invoiceApi.patch(existing._id, toSave)
       return toSave
     }
     const id = await invoiceApi.create(toSave)
     return { ...toSave, _id: id }
+  }
+
+  function setPaid(paid: boolean) {
+    setDraft((d) =>
+      paid
+        ? { ...d, status: "paid", paidDate: d.paidDate ?? todayISO() }
+        : { ...d, status: "sent", paidDate: undefined }
+    )
   }
 
   async function handleSave() {
@@ -197,13 +229,15 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
               <ArrowLeft />
               Zpět
             </Button>
+            <Button variant="outline" onClick={() => setPreviewOpen(true)}>
+              <Eye />
+              Náhled
+            </Button>
             <Button
               variant="outline"
               onClick={handlePdf}
               disabled={!existing}
-              title={
-                existing ? undefined : "Nejprve fakturu uložte"
-              }
+              title={existing ? undefined : "Nejprve fakturu uložte"}
             >
               <FileDown />
               Export PDF
@@ -278,12 +312,29 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                     ))}
                   </div>
                 </Field>
+                <Field label="Úhrada">
+                  <label className="mt-2 flex w-fit cursor-pointer items-center gap-2.5 select-none">
+                    <Checkbox
+                      checked={draft.status === "paid"}
+                      onCheckedChange={(checked) => setPaid(checked === true)}
+                    />
+                    <span className="text-sm">Zaplaceno</span>
+                  </label>
+                </Field>
+                {draft.status === "paid" && (
+                  <Field label="Datum úhrady">
+                    <DatePicker
+                      value={draft.paidDate ?? ""}
+                      onChange={(iso) => set("paidDate", iso)}
+                    />
+                  </Field>
+                )}
               </div>
             </section>
           </div>
 
           {/* Souhrn */}
-          <aside className="lg:sticky lg:top-6 lg:self-start">
+          <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
             <div className="space-y-3 rounded-lg border p-4">
               <h2 className="text-sm">Souhrn</h2>
               <Separator />
@@ -319,6 +370,14 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                 </p>
               )}
             </div>
+            {/* Paušální daň mají jen neplátci DPH. */}
+            {!profile.vatPayer && (
+              <BandImpact
+                invoice={draft}
+                invoices={invoices}
+                profile={profile}
+              />
+            )}
           </aside>
         </div>
 
@@ -395,6 +454,7 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                     onValueChange={(quantity) =>
                       updateItem(item.id, { quantity })
                     }
+                    placeholder="1"
                     aria-invalid={
                       !!errors[`items.${index}.quantity`] || undefined
                     }
@@ -422,6 +482,7 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
                       onValueChange={(unitPrice) =>
                         updateItem(item.id, { unitPrice })
                       }
+                      placeholder="0"
                       aria-invalid={
                         !!errors[`items.${index}.unitPrice`] || undefined
                       }
@@ -481,6 +542,11 @@ export function InvoiceEditor({ invoiceId }: { invoiceId?: string }) {
           </div>
         </section>
       </div>
+
+      <InvoicePdfDialog
+        invoice={previewOpen ? draft : null}
+        onClose={() => setPreviewOpen(false)}
+      />
     </>
   )
 }
@@ -503,6 +569,26 @@ function createDraft(invoices: Invoice[], profile: CompanyProfile): Invoice {
     paymentMethod: "Převodem",
     createdAt: 0,
     updatedAt: 0,
+  }
+}
+
+function duplicateDraft(
+  source: Invoice,
+  invoices: Invoice[],
+  clients: Client[],
+  profile: CompanyProfile
+): Invoice {
+  const draft = createDraft(invoices, profile)
+  const client = clients.find((c) => c._id === source.clientId)
+  return {
+    ...draft,
+    clientId: source.clientId,
+    // Aktuální údaje klienta (mohl se mezitím přestěhovat); smazaný klient
+    // zůstane ve snapshotu z předlohy.
+    client: snapshotOf(client) ?? source.client,
+    items: source.items.map((item) => ({ ...item, id: crypto.randomUUID() })),
+    note: source.note,
+    paymentMethod: source.paymentMethod,
   }
 }
 
@@ -566,34 +652,57 @@ function DatePicker({
   )
 }
 
+// Přijímá desetinnou čárku i tečku a mezery jako oddělovač tisíců.
+const NUMBER_DRAFT_RE = /^-?[\d\s]*[.,]?\d*$/
+
+function parseNumber(text: string): number {
+  const normalized = text.replace(/\s/g, "").replace(",", ".")
+  if (normalized === "" || normalized === "-") return 0
+  return Number(normalized)
+}
+
+// Nula se zobrazuje jako prázdné pole – vzorovou hodnotu ukazuje placeholder.
+function formatNumberDraft(value: number): string {
+  return value === 0 ? "" : String(value).replace(".", ",")
+}
+
 function NumberInput({
   value,
   onValueChange,
+  onBlur,
   ...props
 }: {
   value: number
   onValueChange: (value: number) => void
 } & Omit<React.ComponentProps<typeof Input>, "value" | "onChange" | "type">) {
-  // Drží vlastní textový stav, aby šlo pole vymazat (jinak `Number("")` → 0
-  // a nešla by přepsat počáteční nula). Hodnotu zvenčí promítneme do textu jen
-  // když se liší číselně – sync během renderu, ne v efektu.
-  const [text, setText] = React.useState(() => String(value))
+  // Textový input (ne `type="number"`): ten v prohlížeči hlásí rozepsané
+  // hodnoty jako "" a nebere českou čárku. Vlastní text drží rozepsaný stav;
+  // prázdné pole odpovídá nule, takže se po smazání nevrací "0" před nově
+  // psané číslice. Hodnotu zvenčí do textu promítneme jen když se číselně liší.
+  const [text, setText] = React.useState(() => formatNumberDraft(value))
   const [prevValue, setPrevValue] = React.useState(value)
   if (value !== prevValue) {
     setPrevValue(value)
-    if ((text === "" ? NaN : Number(text)) !== value) setText(String(value))
+    if (parseNumber(text) !== value) setText(formatNumberDraft(value))
   }
 
   return (
     <Input
-      type="number"
+      type="text"
       inputMode="decimal"
+      autoComplete="off"
       value={text}
       onChange={(e) => {
         const raw = e.target.value
+        if (!NUMBER_DRAFT_RE.test(raw)) return
         setText(raw)
-        const n = raw === "" ? 0 : Number(raw)
+        const n = parseNumber(raw)
         if (!Number.isNaN(n)) onValueChange(n)
+      }}
+      onBlur={(e) => {
+        // Po opuštění pole srovnáme zápis (např. "05" → "5", "1," → "1").
+        setText(formatNumberDraft(value))
+        onBlur?.(e)
       }}
       {...props}
     />

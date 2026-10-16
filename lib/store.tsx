@@ -8,7 +8,17 @@ import * as React from "react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
-import type { Client, Invoice, CompanyProfile, Expense, Passkey } from "./types"
+import type {
+  ChecklistItemId,
+  Client,
+  Contract,
+  ContractTerms,
+  Invoice,
+  CompanyProfile,
+  Expense,
+  ExpensePayment,
+  Passkey,
+} from "./types"
 import { emptyAddress } from "./types"
 
 const defaultProfile: CompanyProfile = {
@@ -85,6 +95,8 @@ function invoicePayload(inv: Invoice) {
     taxDate: inv.taxDate,
     items: inv.items,
     status: inv.status,
+    // Datum úhrady dává smysl jen u zaplacené faktury; `null` ho při patchi smaže.
+    paidDate: inv.status === "paid" ? (inv.paidDate ?? null) : null,
     note: inv.note,
     variableSymbol: inv.variableSymbol,
     paymentMethod: inv.paymentMethod,
@@ -113,21 +125,99 @@ export function useExpenses(): Expense[] {
   return useQuery(api.expenses.list) ?? []
 }
 
-type ExpenseInput = Omit<Expense, "_id" | "createdAt" | "updatedAt">
+/** Odškrtnuté platby checklistu od daného měsíce (yyyy-mm) dál. */
+export function useExpensePayments(fromMonth: string): ExpensePayment[] {
+  return useQuery(api.expenses.payments, { fromMonth }) ?? []
+}
+
+type ExpenseInput = Omit<
+  Expense,
+  "_id" | "createdAt" | "updatedAt" | "checklistSince"
+>
 
 export function useExpenseApi() {
   const create = useMutation(api.expenses.create)
   const patch = useMutation(api.expenses.patch)
   const remove = useMutation(api.expenses.remove)
+  const setPaidMut = useMutation(api.expenses.setPaid)
+  const setFlatTaxChecklist = useMutation(api.profile.setFlatTaxChecklist)
 
   return React.useMemo(
     () => ({
-      create: (data: ExpenseInput) => create(data),
-      patch: (id: string, data: Partial<ExpenseInput>) =>
-        patch({ id: id as Id<"expenses">, ...data }),
+      create: (data: ExpenseInput & { checklistSince?: string }) =>
+        create(data),
+      patch: (
+        id: string,
+        data: Partial<ExpenseInput> & { checklistSince?: string | null }
+      ) => patch({ id: id as Id<"expenses">, ...data }),
       remove: (id: string) => remove({ id: id as Id<"expenses"> }),
+      /** `since` = měsíc zařazení do checklistu, `null` = vyřadit. */
+      setChecklist: (item: ChecklistItemId, since: string | null) =>
+        item === "flatTax"
+          ? setFlatTaxChecklist({ since })
+          : patch({ id: item as Id<"expenses">, checklistSince: since }),
+      setPaid: (item: ChecklistItemId, month: string, paid: boolean) =>
+        setPaidMut({
+          item: item === "flatTax" ? item : (item as Id<"expenses">),
+          month,
+          paid,
+        }),
     }),
-    [create, patch, remove]
+    [create, patch, remove, setPaidMut, setFlatTaxChecklist]
+  )
+}
+
+// --- Smlouvy ---------------------------------------------------------------
+
+export function useContracts(): Contract[] {
+  return useQuery(api.contracts.list) ?? []
+}
+
+export function useContractApi() {
+  const generateUploadUrl = useMutation(api.contracts.generateUploadUrl)
+  const create = useMutation(api.contracts.create)
+  const patch = useMutation(api.contracts.patch)
+  const remove = useMutation(api.contracts.remove)
+  const retry = useMutation(api.contracts.retryExtraction)
+
+  return React.useMemo(
+    () => ({
+      /** Nahraje PDF do storage a založí smlouvu; AI výtah poběží na pozadí. */
+      upload: async (file: File) => {
+        const url = await generateUploadUrl()
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": file.type },
+          body: file,
+        })
+        if (!res.ok) throw new Error("Nahrání souboru selhalo.")
+        const { storageId } = (await res.json()) as { storageId: string }
+        return create({
+          fileId: storageId as Id<"_storage">,
+          fileName: file.name,
+        })
+      },
+      patch: (
+        id: string,
+        data: {
+          title?: string
+          clientId?: string | null
+          terms?: ContractTerms
+        }
+      ) =>
+        patch({
+          id: id as Id<"contracts">,
+          title: data.title,
+          clientId:
+            data.clientId === undefined
+              ? undefined
+              : (data.clientId as Id<"clients"> | null),
+          terms: data.terms,
+        }),
+      remove: (id: string) => remove({ id: id as Id<"contracts"> }),
+      retry: (id: string) => retry({ id: id as Id<"contracts"> }),
+    }),
+    [generateUploadUrl, create, patch, remove, retry]
   )
 }
 
@@ -189,6 +279,7 @@ export function useProfileApi() {
           selectedBand: profile.selectedBand,
           bandLimits: profile.bandLimits,
           flatTaxMonthly: profile.flatTaxMonthly,
+          flatTaxChecklistSince: profile.flatTaxChecklistSince,
         }),
     }),
     [save]

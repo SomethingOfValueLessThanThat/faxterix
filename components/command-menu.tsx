@@ -7,6 +7,7 @@ import {
   Users,
   ChartColumn,
   Wallet,
+  FileSignature,
   Settings,
   Plus,
   FileDown,
@@ -78,6 +79,10 @@ export function CommandMenu() {
           <CommandItem onSelect={() => go(routes.expenses)}>
             <Wallet />
             Výdaje
+          </CommandItem>
+          <CommandItem onSelect={() => go(routes.contracts)}>
+            <FileSignature />
+            Smlouvy
           </CommandItem>
           <CommandItem onSelect={() => go(routes.settings)}>
             <Settings />

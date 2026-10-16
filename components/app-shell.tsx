@@ -8,6 +8,7 @@ import {
   Users,
   Zap,
   Wallet,
+  FileSignature,
   Settings,
   LogOut,
   Eye,
@@ -27,7 +28,8 @@ const nav = [
   { href: routes.clients, label: "Klienti", icon: Users, key: "2" },
   { href: routes.reports, label: "Reporty", icon: Zap, key: "3" },
   { href: routes.expenses, label: "Výdaje", icon: Wallet, key: "4" },
-  { href: routes.settings, label: "Nastavení", icon: Settings, key: "5" },
+  { href: routes.contracts, label: "Smlouvy", icon: FileSignature, key: "5" },
+  { href: routes.settings, label: "Nastavení", icon: Settings, key: "6" },
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -140,7 +142,10 @@ function AppChrome({
             }}
             initial={{ opacity: 0, x: -16 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ ...transitions.easeOut, delay: 0.06 * (nav.length + 1) }}
+            transition={{
+              ...transitions.easeOut,
+              delay: 0.06 * (nav.length + 1),
+            }}
             whileTap={{ scale: 0.97 }}
             className="flex cursor-pointer items-center gap-4 rounded-2xl px-4 py-3 text-base text-muted-foreground transition-colors hover:text-foreground"
           >

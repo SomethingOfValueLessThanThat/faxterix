@@ -40,6 +40,8 @@ const invoiceFields = {
   taxDate: v.string(),
   items: v.array(invoiceItemValidator),
   status: statusValidator,
+  // `null` = bez data úhrady (undefined klient při patchi neumí poslat).
+  paidDate: v.optional(v.union(v.string(), v.null())),
   note: v.string(),
   variableSymbol: v.string(),
   paymentMethod: v.string(),
@@ -47,10 +49,11 @@ const invoiceFields = {
 
 export const create = mutation({
   args: invoiceFields,
-  handler: async (ctx, args) => {
+  handler: async (ctx, { paidDate, ...args }) => {
     const now = Date.now()
     return await ctx.db.insert("invoices", {
       ...args,
+      paidDate: paidDate ?? undefined,
       createdAt: now,
       updatedAt: now,
     })
@@ -68,12 +71,17 @@ export const patch = mutation({
     taxDate: v.optional(v.string()),
     items: v.optional(v.array(invoiceItemValidator)),
     status: v.optional(statusValidator),
+    paidDate: invoiceFields.paidDate,
     note: v.optional(v.string()),
     variableSymbol: v.optional(v.string()),
     paymentMethod: v.optional(v.string()),
   },
-  handler: async (ctx, { id, ...rest }) => {
-    await ctx.db.patch(id, { ...rest, updatedAt: Date.now() })
+  handler: async (ctx, { id, paidDate, ...rest }) => {
+    await ctx.db.patch(id, {
+      ...rest,
+      ...(paidDate !== undefined && { paidDate: paidDate ?? undefined }),
+      updatedAt: Date.now(),
+    })
   },
 })
 

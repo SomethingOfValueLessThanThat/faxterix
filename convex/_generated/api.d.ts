@@ -9,6 +9,8 @@
  */
 
 import type * as clients from "../clients.js";
+import type * as contracts from "../contracts.js";
+import type * as contractsAi from "../contractsAi.js";
 import type * as data from "../data.js";
 import type * as expenses from "../expenses.js";
 import type * as http from "../http.js";
@@ -25,6 +27,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   clients: typeof clients;
+  contracts: typeof contracts;
+  contractsAi: typeof contractsAi;
   data: typeof data;
   expenses: typeof expenses;
   http: typeof http;

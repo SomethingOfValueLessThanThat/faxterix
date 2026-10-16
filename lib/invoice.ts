@@ -114,7 +114,7 @@ export function nextInvoiceNumber(
 export const emptyItem = (vatRate = 21): InvoiceItem => ({
   id: crypto.randomUUID(),
   description: "",
-  quantity: 1,
+  quantity: 0,
   unit: "hodina",
   unitPrice: 0,
   vatRate,

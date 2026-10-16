@@ -40,6 +40,14 @@ export function addDaysISO(iso: string, days: number): string {
   return toLocalISODate(d)
 }
 
+/** Den a měsíc z epoch millis: „3. 10.". */
+export function formatDayMonth(ms: number): string {
+  return new Intl.DateTimeFormat("cs-CZ", {
+    day: "numeric",
+    month: "numeric",
+  }).format(ms)
+}
+
 /** Formátování IČO jako 8 číslic. */
 export function formatIco(ico: string): string {
   return ico.replace(/\s+/g, "")

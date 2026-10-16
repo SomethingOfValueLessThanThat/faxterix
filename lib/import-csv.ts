@@ -122,7 +122,8 @@ export function parseFakturoidCsv(
   const ts = Date.now()
   const existingNumbers = new Set(existing.invoices.map((i) => i.number))
   const clientIndex = new Map<string, string>() // klíč -> _id
-  for (const c of existing.clients) clientIndex.set(clientKey(c.ico, c.name), c._id)
+  for (const c of existing.clients)
+    clientIndex.set(clientKey(c.ico, c.name), c._id)
 
   const clients: Client[] = []
   const invoices: Invoice[] = []
@@ -190,6 +191,7 @@ export function parseFakturoidCsv(
       vatRate,
     }
 
+    const status = mapStatus(col(r, "Status"))
     invoices.push({
       _id: crypto.randomUUID(),
       number,
@@ -199,7 +201,8 @@ export function parseFakturoidCsv(
       dueDate: col(r, "Due on"),
       taxDate: col(r, "Taxable fulfillment due"),
       items: [item],
-      status: mapStatus(col(r, "Status")),
+      status,
+      paidDate: status === "paid" ? col(r, "Paid on") || undefined : undefined,
       note: "",
       variableSymbol: col(r, "Variable symbol"),
       paymentMethod: mapPayment(col(r, "Payment method")),

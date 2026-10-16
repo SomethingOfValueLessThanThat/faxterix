@@ -16,8 +16,8 @@
 // Modul je čistý (žádné DOM/Node API), takže ho lze importovat i v Convex runtime.
 
 export interface ParsedPayment {
-  /** Variabilní symbol (= číslo/VS faktury). */
-  vs: string
+  /** Variabilní symbol (= číslo/VS faktury); platby kartou ho nemají. */
+  vs: string | null
   /** Částka v účetní měně, kladná = příchozí. */
   amount: number
   /** Měna, např. "CZK". */
@@ -115,7 +115,8 @@ function parseCzDateTime(raw: string): string | null {
 
 /**
  * Naparsuje tělo Raiffka emailu (prostý text; pro HTML použij nejdřív
- * `htmlToText`). Vrací null, pokud chybí VS nebo částka.
+ * `htmlToText`). Vrací null, pokud chybí částka. VS je volitelný – odchozí
+ * platby (hlavně kartou) ho nemají a párují se jen podle částky.
  */
 export function parseRaiffeisenEmail(text: string): ParsedPayment | null {
   if (!text) return null
@@ -129,14 +130,14 @@ export function parseRaiffeisenEmail(text: string): ParsedPayment | null {
   // VS: od popisku „Variabilní symbol" první skupina aspoň 2 číslic.
   const vsMatch = scanFromLabel(lines, /variabiln[íi]\s+symbol/i, /\d{2,}/)
   const vs = vsMatch?.[0] ?? null
-  if (!vs) return null
 
   // Částka: od popisku „Částka" první peněžní hodnota (s případným +/- a měnou).
-  const amountMatch = scanFromLabel(
-    lines,
-    /částka/i,
-    /([+-]?\d[\d\s.]*,\d{2})\s*([A-Za-z]{3})?/
-  )
+  // Přednost má „Částka v měně účtu" – u karetní platby v cizí měně je v emailu
+  // i původní částka (např. v USD), která by s výdajem v Kč nesedla.
+  const money = /([+-]?\d[\d\s.]*,\d{2})\s*([A-Za-z]{3})?/
+  const amountMatch =
+    scanFromLabel(lines, /částka v měně účtu/i, money) ??
+    scanFromLabel(lines, /částka/i, money)
   if (!amountMatch) return null
   const amount = parseCzAmount(amountMatch[1])
   if (amount === null) return null
