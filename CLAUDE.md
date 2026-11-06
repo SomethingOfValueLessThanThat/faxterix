@@ -35,7 +35,7 @@ FAXTERIX is a single-user Czech invoicing app for a freelancer (OSVČ on paušá
 - Every page uses `PageContainer` + `PageHeader` (title, description, `actions`). Entrance animations use `FadeIn` / `Stagger` / `StaggerItem` from `components/motion`.
 - Amounts and other sensitive numbers render inside `<Sensitive>` so privacy mode (`lib/privacy.tsx`) can blur them.
 - Money is formatted via `formatCZK` from `lib/format.ts` — never inline `toLocaleString`.
-- **Never use a monospace font anywhere in the UI** (numbers, charts, IDs included). Sans only; `tabular-nums` is the tool for aligning digits. The only exception is the PDF invoice.
+- **Never use a monospace font anywhere in the UI** (numbers, charts, IDs included). Sans only; `tabular-nums` is the tool for aligning digits. The PDF invoice uses Inter Display (sans) too.
 
 ### Styling
 

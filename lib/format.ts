@@ -22,6 +22,14 @@ export function formatDate(iso: string): string {
   return new Intl.DateTimeFormat("cs-CZ", { dateStyle: "medium" }).format(d)
 }
 
+/** Datum s měsícem slovy: „7. dubna 2025". */
+export function formatDateLong(iso: string): string {
+  if (!iso) return ""
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return new Intl.DateTimeFormat("cs-CZ", { dateStyle: "long" }).format(d)
+}
+
 /** Datum jako `YYYY-MM-DD` v lokálním čase (ne UTC, aby se den neposouval). */
 export function toLocalISODate(d: Date): string {
   const year = d.getFullYear()
