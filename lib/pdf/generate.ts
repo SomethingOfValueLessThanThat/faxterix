@@ -21,11 +21,10 @@ async function buildQrDataUrl(
     dueDate: invoice.dueDate,
   })
   const QRCode = (await import("qrcode")).default
-  // Bílé moduly na černém pozadí, aby QR splynul s černým listem faktury.
   return QRCode.toDataURL(payload, {
     margin: 0,
     width: 320,
-    color: { dark: "#f2f2f2ff", light: "#000000ff" },
+    color: { dark: "#000000ff", light: "#ffffffff" },
   })
 }
 

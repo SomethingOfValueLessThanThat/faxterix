@@ -1,7 +1,7 @@
 // PDF faktury přes @react-pdf/renderer.
-// Vizuál: černý list, bílá grotesk (Inter Display), obří název dodavatele
-// v hranatých závorkách přes celou šířku, minimum linek, platební blok s QR
-// a patička se čtyřmi sloupci údajů dodavatele.
+// Vizuál: švýcarská typografie — černá grotesk (Inter Display) na bílém listu,
+// přísná dvanáctisloupcová mřížka, žádné linky ani rámečky. Strukturu nese jen
+// zarovnání do sloupců, velikost písma a rytmus mezer.
 
 import {
   Document,
@@ -14,7 +14,7 @@ import {
 } from "@react-pdf/renderer"
 import type { Invoice, CompanyProfile } from "../types"
 import { computeTotals, lineTotal, round2 } from "../invoice"
-import { formatCZK, formatDate, formatDateLong, formatNumber } from "../format"
+import { formatCZK, formatDateLong, formatNumber } from "../format"
 import { czechAccountToIban } from "../spayd"
 
 const FONT = "Inter Display"
@@ -35,43 +35,48 @@ export function registerPdfFonts() {
 }
 
 const c = {
-  paper: "#000000",
-  ink: "#f2f2f2",
+  paper: "#ffffff",
+  ink: "#000000",
+  muted: "#6e6e6e",
 }
 
-// A4 = 595 × 842 pt; okraj 21 pt ze všech stran jako na předloze.
-const MARGIN = 21
+// ── Mřížka ─────────────────────────────────────────────────
+// A4 = 595 × 842 pt, 12 sloupců s pevnou mezerou. Každý blok začíná na hraně
+// sloupce a má šířku celého počtu sloupců.
+const MARGIN = 34
 const CONTENT_W = 595 - 2 * MARGIN
-// Levé hrany sloupců (od levého okraje obsahu) převzaté z předlohy.
-const COL_2 = 140
-const COL_RIGHT = 279
+const COLS = 12
+const GUTTER = 12
+const COL_W = (CONTENT_W - (COLS - 1) * GUTTER) / COLS
 
-// Šířky velkých písmen Inter Display Bold (A–Z, v setinách em) — react-pdf
-// neumí text změřit předem, a nadpis musí přesně vyplnit šířku řádku.
-const UPPER_W = [
-  71, 64, 73, 70, 61, 58, 74, 72, 26, 56, 69, 56, 89, 73, 75, 63, 75, 65, 65,
-  64, 70, 71, 100, 70, 69, 63,
+/** Šířka bloku přes `n` sloupců (včetně mezer mezi nimi). */
+const span = (n: number) => n * COL_W + (n - 1) * GUTTER
+
+// Vertikální rytmus: všechny mezery jsou násobky základní jednotky.
+const UNIT = 6
+
+// Šířky znaků ASCII 32–126 v Inter Display Bold (setiny em) — react-pdf
+// neumí text změřit předem, a nadpis má přesně vyplnit šířku řádku.
+const BOLD_W = [
+  21, 25, 47, 63, 65, 94, 65, 27, 33, 33, 54, 65, 24, 44, 24, 36, 65, 39, 60,
+  62, 66, 60, 62, 55, 61, 62, 24, 25, 65, 65, 65, 57, 101, 71, 64, 73, 70, 61,
+  58, 74, 72, 26, 56, 69, 56, 89, 73, 75, 63, 75, 65, 65, 64, 70, 71, 100, 70,
+  69, 63, 33, 36, 33, 46, 48, 29, 55, 60, 56, 60, 56, 37, 60, 59, 25, 25, 55,
+  25, 88, 59, 58, 60, 60, 37, 52, 37, 59, 55, 82, 54, 55, 52, 44, 35, 44, 65,
 ]
-const HEADING_TRACKING = -0.035
-// Krátké jméno by jinak přerostlo vyhrazenou výšku hlavičky.
-const HEADING_MAX = 100
+const HEADING_TRACKING = -0.04
+// Krátké jméno by jinak přerostlo do obřího písma.
+const HEADING_MAX = 124
 
 function glyphWidth(ch: string): number {
-  const base = ch.normalize("NFD")[0]
-  const code = base.charCodeAt(0) - 65
-  if (code >= 0 && code < 26) return UPPER_W[code] / 100
-  if (/\d/.test(base)) return 0.65
-  if (base === " ") return 0.21
-  if (base === "[" || base === "]") return 0.33
-  if (base === "." || base === ",") return 0.24
-  if (base === "-") return 0.44
-  return 0.7
+  // Diakritika má šířku základního písmene („č" = „c").
+  const code = ch.normalize("NFD").charCodeAt(0) - 32
+  return code >= 0 && code < BOLD_W.length ? BOLD_W[code] / 100 : 0.6
 }
 
 /** Velikost písma, při které nadpis vyplní celou šířku obsahu. */
 function headingSize(text: string): number {
-  const chars = [...text]
-  const em = chars.reduce(
+  const em = [...text].reduce(
     (sum, ch) => sum + glyphWidth(ch) + HEADING_TRACKING,
     0
   )
@@ -81,108 +86,81 @@ function headingSize(text: string): number {
 const s = StyleSheet.create({
   page: {
     fontFamily: FONT,
-    fontWeight: 600,
+    fontWeight: 500,
     fontSize: 9.5,
     color: c.ink,
     backgroundColor: c.paper,
-    paddingTop: 22,
+    paddingTop: MARGIN - UNIT,
     paddingBottom: MARGIN,
     paddingHorizontal: MARGIN,
-    lineHeight: 1.05,
+    lineHeight: 1.4,
   },
 
-  // Pevná výška, aby meta řádek seděl na stejném místě pro jakkoli dlouhé jméno.
-  header: { height: 123 },
-  heading: { fontWeight: 700, lineHeight: 1 },
+  row: { flexDirection: "row", columnGap: GUTTER },
+  section: { marginTop: 6 * UNIT },
 
-  // ── Meta řádek (datum, klient, číslo, předmět, FAKTURA) ────
-  meta: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-  },
-  metaCol1: {
-    width: COL_2,
-    fontSize: 13,
-    letterSpacing: -0.4,
-    lineHeight: 1.1,
-  },
-  metaCol2: { flex: 1, fontSize: 13, letterSpacing: -0.4, lineHeight: 1.1 },
+  heading: { fontWeight: 700, lineHeight: 1, marginTop: -4 },
+  label: { fontSize: 7.5, color: c.muted, marginBottom: UNIT / 2 },
+  strong: { fontWeight: 600 },
+  muted: { color: c.muted },
+  right: { textAlign: "right" },
+
+  // ── Hlavička dokladu ───────────────────────────────────────
   docTitle: {
-    fontSize: 37,
-    fontWeight: 700,
-    letterSpacing: -1.4,
-    lineHeight: 0.8,
-  },
-  rule: { height: 0.75, backgroundColor: c.ink },
-  metaRule: { marginTop: 13 },
-
-  // ── Položky ────────────────────────────────────────────────
-  items: { marginTop: 9, minHeight: 222 },
-  row: { flexDirection: "row", letterSpacing: -0.2, marginBottom: 10 },
-  cDesc: { width: COL_RIGHT + 10, paddingRight: 12 },
-  sub: { paddingLeft: 36 },
-  cQty: { width: 71 },
-  cPrice: { width: 72 },
-  cVat: { width: 50 },
-  cTotal: { flex: 1, textAlign: "right" },
-
-  // ── Souhrn ─────────────────────────────────────────────────
-  summary: { marginLeft: COL_RIGHT, letterSpacing: -0.2 },
-  sumLabel: { textTransform: "uppercase" },
-  sumRow: { flexDirection: "row", justifyContent: "space-between" },
-  dueRow: { marginTop: 10 },
-
-  spacer: { flexGrow: 1 },
-
-  // ── Platba ─────────────────────────────────────────────────
-  payment: {
-    flexDirection: "row",
-    paddingTop: 9,
-    fontSize: 7.5,
-    lineHeight: 1.45,
-    textTransform: "uppercase",
-    letterSpacing: -0.1,
-  },
-  payCol1: { width: COL_2, justifyContent: "space-between" },
-  payCol2: { width: COL_RIGHT - COL_2, justifyContent: "space-between" },
-  payCol3: { flex: 1, paddingTop: 3 },
-  payTitle: {
-    fontSize: 29,
+    fontSize: 34,
     fontWeight: 700,
     letterSpacing: -1.2,
     lineHeight: 1,
-    marginBottom: 17,
   },
-  payRef: { paddingTop: 2 },
-  gap: { marginTop: 11 },
-  qr: { width: 58, height: 58, marginTop: 19, marginBottom: 9 },
+  docNumber: {
+    fontSize: 14,
+    fontWeight: 600,
+    letterSpacing: -0.3,
+    marginTop: UNIT,
+  },
+  partyName: { fontWeight: 600, fontSize: 10.5, marginBottom: 1 },
+  factValue: { fontWeight: 600, fontSize: 10.5 },
 
-  terms: {
-    fontSize: 5.6,
-    fontWeight: 500,
-    lineHeight: 1.3,
-    textTransform: "none",
-    letterSpacing: 0,
+  // ── Položky ────────────────────────────────────────────────
+  itemRow: { paddingVertical: UNIT * 0.75 },
+  sub: { color: c.muted, fontSize: 8.5 },
+
+  // ── Souhrn ─────────────────────────────────────────────────
+  sumRow: { flexDirection: "row", justifyContent: "space-between" },
+  dueRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    marginTop: 2 * UNIT,
   },
-  termsTitle: { fontWeight: 700, textTransform: "uppercase" },
-  termsBold: { fontWeight: 700 },
+  dueLabel: {
+    fontWeight: 600,
+    fontSize: 10.5,
+    lineHeight: 1,
+    paddingBottom: 2,
+  },
+  dueAmount: {
+    fontWeight: 700,
+    fontSize: 24,
+    letterSpacing: -0.7,
+    lineHeight: 1,
+  },
+
+  spacer: { flexGrow: 1, minHeight: 6 * UNIT },
+
+  // ── Platba ─────────────────────────────────────────────────
+  payTitle: {
+    fontSize: 26,
+    fontWeight: 700,
+    letterSpacing: -0.9,
+    lineHeight: 1,
+  },
+  qr: { width: 80, height: 80, marginTop: 2 },
+  qrCaption: { fontSize: 7.5, color: c.muted, marginTop: UNIT },
 
   // ── Patička ────────────────────────────────────────────────
-  footer: {
-    marginTop: 22,
-    paddingTop: 6,
-    borderTopWidth: 0.75,
-    borderTopColor: c.ink,
-    flexDirection: "row",
-    fontSize: 5.5,
-    fontWeight: 700,
-    lineHeight: 1.45,
-    textTransform: "uppercase",
-  },
-  footerCol: { flex: 1, paddingRight: 8 },
+  footer: { fontSize: 7.5, lineHeight: 1.45, marginTop: 5 * UNIT },
 })
-
-const br = (text: string) => `[${text}]`
 
 export interface InvoicePdfProps {
   invoice: Invoice
@@ -195,197 +173,219 @@ export function InvoiceDocument({
   profile,
   qrDataUrl,
 }: InvoicePdfProps) {
-  const totals = computeTotals(invoice.items, profile.vatPayer)
+  const vatPayer = profile.vatPayer
+  const totals = computeTotals(invoice.items, vatPayer)
   const client = invoice.client
   const iban = czechAccountToIban(profile.bankAccount)
-  const heading = br((profile.name || "—").toUpperCase())
+  const heading = profile.name || "—"
   const headingPt = headingSize(heading)
 
-  const clientAddress = client
+  // Rozložení tabulky ve sloupcích mřížky; neplátce sloupec DPH nemá.
+  const cols = vatPayer
+    ? { desc: 5, qty: 1, price: 2, vat: 2, total: 2 }
+    : { desc: 6, qty: 2, price: 2, vat: 0, total: 2 }
+
+  const supplierLines = [
+    profile.address.street,
+    cityLine(profile.address.zip, profile.address.city),
+    profile.ico && `IČO ${profile.ico}`,
+    profile.dic && `DIČ ${profile.dic}`,
+    vatPayer ? null : "Neplátce DPH",
+  ]
+  const clientLines = client
     ? [
         client.address.street,
-        [client.address.zip, client.address.city].filter(Boolean).join(" "),
+        cityLine(client.address.zip, client.address.city),
+        client.ico && `IČO ${client.ico}`,
+        client.dic && `DIČ ${client.dic}`,
       ]
-        .filter(Boolean)
-        .join(", ")
-    : ""
-  const clientIds = client
-    ? [
-        client.ico && `IČO: ${client.ico}`,
-        client.dic && `DIČ: ${client.dic}`,
-      ].filter(Boolean)
     : []
 
-  const terms = [
-    client
-      ? `Odběratel: ${client.name}${clientAddress ? `, ${clientAddress}` : ""}.`
-      : null,
-    clientIds.length ? `${clientIds.join(", ")}.` : null,
-    `Datum vystavení: ${formatDate(invoice.issueDate) || "—"}. Datum splatnosti: ${formatDate(invoice.dueDate) || "—"}.`,
-    profile.vatPayer
-      ? `Datum uskutečnění zdanitelného plnění: ${formatDate(invoice.taxDate) || "—"}.`
-      : null,
-    `Při platbě uveďte variabilní symbol ${invoice.variableSymbol || "—"}.`,
-    invoice.note || null,
-  ].filter((t): t is string => Boolean(t))
+  const paymentMethod = invoice.paymentMethod || "Bankovní převod"
+  const facts: [string, string][] = vatPayer
+    ? [
+        ["Datum vystavení", formatDateLong(invoice.issueDate)],
+        ["Datum zdan. plnění", formatDateLong(invoice.taxDate)],
+        ["Datum splatnosti", formatDateLong(invoice.dueDate)],
+        ["Variabilní symbol", invoice.variableSymbol],
+      ]
+    : [
+        ["Datum vystavení", formatDateLong(invoice.issueDate)],
+        ["Datum splatnosti", formatDateLong(invoice.dueDate)],
+        ["Způsob platby", paymentMethod],
+        ["Variabilní symbol", invoice.variableSymbol],
+      ]
 
-  const supplierIds = profile.dic
-    ? { label: "IČO / DIČ", value: `${profile.ico} / ${profile.dic}` }
-    : { label: "IČO", value: profile.ico }
+  const payRows = (
+    [
+      ["Způsob platby", paymentMethod],
+      ["Číslo účtu", profile.bankAccount],
+      ["IBAN", iban ? groupIban(iban) : ""],
+      ["Variabilní symbol", invoice.variableSymbol],
+      ["Splatnost", formatDateLong(invoice.dueDate)],
+      ["Částka", formatCZK(totals.total)],
+    ] as [string, string][]
+  ).filter(([, value]) => Boolean(value))
 
   return (
     <Document title={`Faktura ${invoice.number}`}>
       <Page size="A4" style={s.page}>
-        <View style={s.header}>
-          <Text
-            style={[
-              s.heading,
-              {
-                fontSize: headingPt,
-                letterSpacing: HEADING_TRACKING * headingPt,
-              },
-            ]}
-          >
-            {heading}
-          </Text>
-        </View>
+        <Text
+          style={[
+            s.heading,
+            {
+              fontSize: headingPt,
+              letterSpacing: HEADING_TRACKING * headingPt,
+            },
+          ]}
+        >
+          {heading}
+        </Text>
 
-        <View style={s.meta}>
-          <View style={s.metaCol1}>
-            <Text>{br(formatDateLong(invoice.issueDate) || "—")}</Text>
-            <Text>{br(client?.name || "—")}</Text>
+        <View style={[s.row, { marginTop: headingPt * 0.22 + 4 * UNIT }]}>
+          <View style={{ width: span(6) }}>
+            <Text style={s.docTitle}>Faktura</Text>
+            <Text style={s.docNumber}>č. {invoice.number}</Text>
+            {vatPayer ? (
+              <Text style={[s.muted, { marginTop: UNIT / 3 }]}>
+                Daňový doklad
+              </Text>
+            ) : null}
           </View>
-          <View style={s.metaCol2}>
-            <Text>{br(`#${invoice.number}`)}</Text>
-            <Text>
-              {br(profile.vatPayer ? "Daňový doklad" : "Nejsem plátce DPH")}
-            </Text>
-          </View>
-          <Text style={s.docTitle}>FAKTURA</Text>
-        </View>
-        <View style={[s.rule, s.metaRule]} />
-
-        <View style={s.items}>
-          {invoice.items.map((item) => {
-            const [title, ...subs] = (item.description || "—").split("\n")
-            const vat = profile.vatPayer
-              ? round2((lineTotal(item) * item.vatRate) / 100)
-              : 0
-            return (
-              <View key={item.id} style={s.row} wrap={false}>
-                <View style={s.cDesc}>
-                  <Text>{title}</Text>
-                  {subs.map((sub, i) => (
-                    <Text key={i} style={s.sub}>
-                      {sub}
-                    </Text>
-                  ))}
-                </View>
-                <Text style={s.cQty}>
-                  {formatQty(item.quantity)} {item.unit}
-                </Text>
-                <Text style={s.cPrice}>{formatNumber(item.unitPrice)}</Text>
-                <Text style={s.cVat}>{formatNumber(vat)}</Text>
-                <Text style={s.cTotal}>{formatNumber(lineTotal(item))}</Text>
-              </View>
-            )
-          })}
-        </View>
-
-        <View style={s.summary} wrap={false}>
-          <SumRow
-            label={profile.vatPayer ? "Základ daně:" : "Mezisoučet:"}
-            value={totals.subtotal}
+          <Party label="Dodavatel" name={profile.name} lines={supplierLines} />
+          <Party
+            label="Odběratel"
+            name={client?.name || "—"}
+            lines={clientLines}
           />
-          {profile.vatPayer ? (
-            totals.vatRows.map((row) => (
-              <SumRow
-                key={row.rate}
-                label={`DPH (${row.rate} %):`}
-                value={row.vat}
-              />
-            ))
-          ) : (
-            <SumRow label="DPH (neplátce):" value={0} />
-          )}
-          <SumRow label="Celkem:" value={totals.total} />
-          <View style={s.dueRow}>
-            <SumRow label="K úhradě (CZK) :" value={totals.total} />
+        </View>
+
+        <View style={[s.row, s.section]}>
+          {facts.map(([label, value]) => (
+            <View key={label} style={{ width: span(3) }}>
+              <Text style={s.label}>{label}</Text>
+              <Text style={s.factValue}>{value || "—"}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={[s.row, s.section, s.label]} fixed>
+          <Text style={{ width: span(cols.desc) }}>Položka</Text>
+          <Text style={[s.right, { width: span(cols.qty) }]}>Počet</Text>
+          <Text style={[s.right, { width: span(cols.price) }]}>
+            Cena za jednotku
+          </Text>
+          {vatPayer ? (
+            <Text style={[s.right, { width: span(cols.vat) }]}>DPH</Text>
+          ) : null}
+          <Text style={[s.right, { width: span(cols.total) }]}>Celkem</Text>
+        </View>
+
+        {invoice.items.map((item) => {
+          const [title, ...subs] = (item.description || "—").split("\n")
+          const vat = round2((lineTotal(item) * item.vatRate) / 100)
+          return (
+            <View key={item.id} style={[s.row, s.itemRow]} wrap={false}>
+              <View style={{ width: span(cols.desc) }}>
+                <Text style={s.strong}>{title}</Text>
+                {subs.map((sub, i) => (
+                  <Text key={i} style={s.sub}>
+                    {sub}
+                  </Text>
+                ))}
+              </View>
+              <Text style={[s.right, { width: span(cols.qty) }]}>
+                {formatQty(item.quantity)} {item.unit}
+              </Text>
+              <Text style={[s.right, { width: span(cols.price) }]}>
+                {formatNumber(item.unitPrice)}
+              </Text>
+              {vatPayer ? (
+                <Text style={[s.right, { width: span(cols.vat) }]}>
+                  {formatNumber(vat)}
+                </Text>
+              ) : null}
+              <Text style={[s.right, s.strong, { width: span(cols.total) }]}>
+                {formatNumber(lineTotal(item))}
+              </Text>
+            </View>
+          )
+        })}
+
+        <View style={[s.row, s.section]} wrap={false}>
+          <View style={{ width: span(6) }}>
+            {invoice.note ? (
+              <>
+                <Text style={s.label}>Poznámka</Text>
+                <Text>{invoice.note}</Text>
+              </>
+            ) : null}
+          </View>
+          <View style={{ width: span(6) }}>
+            <SumRow
+              label={vatPayer ? "Základ daně" : "Mezisoučet"}
+              value={totals.subtotal}
+            />
+            {vatPayer
+              ? totals.vatRows.map((row) => (
+                  <SumRow
+                    key={row.rate}
+                    label={`DPH ${row.rate} %`}
+                    value={row.vat}
+                  />
+                ))
+              : null}
+            <View style={s.dueRow}>
+              <Text style={s.dueLabel}>K úhradě</Text>
+              <Text style={s.dueAmount}>{formatCZK(totals.total)}</Text>
+            </View>
           </View>
         </View>
 
         <View style={s.spacer} />
 
-        <View style={s.rule} />
-        <View style={s.payment} wrap={false}>
-          <View style={s.payCol1}>
-            <View>
-              <Text style={s.payTitle}>PLATBA</Text>
-              <Text>{br(invoice.paymentMethod || "Bankovní převod")}</Text>
-              <Text style={s.gap}>{br(profile.name || "—")}</Text>
-              {profile.bankAccount ? (
-                <Text>Účet: {profile.bankAccount}</Text>
-              ) : null}
-              {iban ? <Text>IBAN: {iban}</Text> : null}
+        <View wrap={false}>
+          <View style={s.row}>
+            <View style={{ width: span(3) }}>
+              <Text style={s.payTitle}>Platba</Text>
             </View>
-            <Text style={s.gap}>
-              {br(`Splatnost: ${formatDate(invoice.dueDate) || "—"}`)}
-            </Text>
-          </View>
-
-          <View style={s.payCol2}>
-            <View>
-              <Text style={s.payRef}>
-                {br(`Faktura č. ${invoice.number}`)}
-                {"\n"}
-                {br(`VS: ${invoice.variableSymbol || "—"}`)}
-              </Text>
+            <View style={{ width: span(3) }}>
               {qrDataUrl ? (
-                // eslint-disable-next-line jsx-a11y/alt-text
-                <Image style={s.qr} src={qrDataUrl} />
+                <>
+                  {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                  <Image style={s.qr} src={qrDataUrl} />
+                  <Text style={s.qrCaption}>Zaplaťte QR kódem</Text>
+                </>
               ) : null}
             </View>
-            {qrDataUrl ? <Text>Zaplaťte QR kódem</Text> : null}
+            <View style={{ width: span(6) }}>
+              {payRows.map(([label, value]) => (
+                <View key={label} style={s.row}>
+                  <Text style={[s.muted, { width: span(2) }]}>{label}</Text>
+                  <Text style={[s.strong, { width: span(4) }]}>{value}</Text>
+                </View>
+              ))}
+            </View>
           </View>
 
-          <View style={[s.payCol3, s.terms]}>
-            <Text style={s.termsTitle}>Fakturační údaje:</Text>
-            {terms.map((t, i) => (
-              <Text key={i}>
-                {i + 1}. {t}
+          <View style={[s.row, s.footer]}>
+            <View style={{ width: span(6) }}>
+              <Text>
+                {profile.name}
+                {vatPayer ? "" : ", neplátce DPH"}
               </Text>
-            ))}
-            <Text style={s.termsBold}>
-              {profile.vatPayer
-                ? "Dodavatel je plátcem DPH."
-                : "Dodavatel není plátcem DPH."}{" "}
-              Fyzická osoba zapsaná v živnostenském rejstříku.
-            </Text>
-          </View>
-        </View>
-
-        <View style={s.footer}>
-          <View style={s.footerCol}>
-            <Text>{br(profile.name || "—")}</Text>
-            <Text>{br(profile.address.street || "—")}</Text>
-          </View>
-          <View style={s.footerCol}>
-            <Text>
-              {br(
-                [profile.address.zip, profile.address.city]
-                  .filter(Boolean)
-                  .join(" ") || "—"
-              )}
-            </Text>
-            <Text>{br(profile.address.country || "Česká republika")}</Text>
-          </View>
-          <View style={s.footerCol}>
-            <Text>{br(supplierIds.label)}</Text>
-            <Text>{br(supplierIds.value || "—")}</Text>
-          </View>
-          <View style={s.footerCol}>
-            <Text>{br(profile.email || "—")}</Text>
-            <Text>{br(profile.phone || "—")}</Text>
+              <Text style={s.muted}>
+                Fyzická osoba zapsaná v živnostenském rejstříku.
+              </Text>
+            </View>
+            <View style={{ width: span(3) }}>
+              <Text style={s.muted}>E-mail</Text>
+              <Text>{profile.email || "—"}</Text>
+            </View>
+            <View style={{ width: span(3) }}>
+              <Text style={s.muted}>Telefon</Text>
+              <Text>{profile.phone || "—"}</Text>
+            </View>
           </View>
         </View>
       </Page>
@@ -393,13 +393,42 @@ export function InvoiceDocument({
   )
 }
 
+function Party({
+  label,
+  name,
+  lines,
+}: {
+  label: string
+  name: string
+  lines: (string | null | false | undefined)[]
+}) {
+  return (
+    <View style={{ width: span(3) }}>
+      <Text style={s.label}>{label}</Text>
+      <Text style={s.partyName}>{name || "—"}</Text>
+      {lines.filter(Boolean).map((line, i) => (
+        <Text key={i}>{line}</Text>
+      ))}
+    </View>
+  )
+}
+
 function SumRow({ label, value }: { label: string; value: number }) {
   return (
     <View style={s.sumRow}>
-      <Text style={s.sumLabel}>{label}</Text>
+      <Text style={s.muted}>{label}</Text>
       <Text>{formatCZK(value)}</Text>
     </View>
   )
+}
+
+function cityLine(zip: string, city: string): string {
+  return [zip, city].filter(Boolean).join(" ")
+}
+
+/** IBAN po čtveřicích, jak se píše na dokladech. */
+function groupIban(iban: string): string {
+  return iban.replace(/(.{4})(?=.)/g, "$1 ")
 }
 
 /** Množství bez zbytečných desetinných nul („1", „1,5"). */
