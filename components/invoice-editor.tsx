@@ -293,7 +293,16 @@ export function InvoiceEditor({
                 <Field label="Datum vystavení">
                   <DatePicker
                     value={draft.issueDate}
-                    onChange={(iso) => set("issueDate", iso)}
+                    onChange={(iso) =>
+                      // Splatnost a DUZP se odvozují od data vystavení, ne od
+                      // dne, kdy byl koncept založen.
+                      setDraft((d) => ({
+                        ...d,
+                        issueDate: iso,
+                        dueDate: addDaysISO(iso, profile.dueDays || 14),
+                        taxDate: iso,
+                      }))
+                    }
                   />
                 </Field>
                 <Field label="Způsob platby">
